@@ -1,0 +1,89 @@
+library AuraManager initializer Init requires AuraData
+
+globals
+    private AuraDataList auraDataList
+    private timer updateTimer
+    private constant real fUpdatePeriod = 0.04
+    private hashtable auraDataTable = InitHashtable()
+endglobals
+
+//just loop O(N) not O(N^2)
+private function Update takes nothing returns nothing
+    local AuraDataNode iter = auraDataList.head
+    local AuraData data = NULL
+    loop
+        exitwhen not(iter != NULL)
+            set data = iter.data
+            ///지연된 Stopped 처리에 의해 필요합니다.
+            if(data.isExpired()) then
+                call RemoveSavedInteger(auraDataTable,GetHandleId(data.uTarget),data.nAuraId)
+                call data.destroy()
+                set iter = auraDataList.RemoveNode(iter)
+            else
+                call data.Play(fUpdatePeriod)
+                ///플레이후에 Timer에 의해 필요합니다.
+                if(data.isExpired()) then
+                    call RemoveSavedInteger(auraDataTable,GetHandleId(data.uTarget),data.nAuraId)
+                    call data.destroy()
+                    set iter = auraDataList.RemoveNode(iter)
+                else
+                    set iter = iter.next
+                endif
+            endif
+    endloop
+endfunction
+
+private function Play takes AuraData auraData returns nothing
+    //call FLog("Play")
+    call auraDataList.Add(auraData)
+    //debug call Log("AuraDataList.Count="+I2S(AuraDataList.Count))
+endfunction
+
+function AddAura takes unit uTarget, integer nAuraId, integer nLevel, real fTime, real fDelay, boolean dependAbility returns AuraData
+    local AuraData tempAuraData = AuraData.create(uTarget,nAuraId,nLevel,fTime,fDelay, dependAbility)
+    call Play(tempAuraData)
+    call SaveInteger(auraDataTable,GetHandleId(uTarget),nAuraId,tempAuraData)
+    return tempAuraData
+endfunction
+
+function RemoveAura takes unit uTarget, integer nAuraId returns nothing
+    local AuraData tempAuraData = LoadInteger(auraDataTable,GetHandleId(uTarget),nAuraId)
+    debug call Log("[Auradata-RemoveAura]")
+    if(tempAuraData != NULL) then
+        call tempAuraData.Stop()
+    endif
+endfunction
+
+function hasAura takes unit uTarget, integer nAuraId returns boolean
+    local AuraData tempAuraData = LoadInteger(auraDataTable,GetHandleId(uTarget),nAuraId)
+    return tempAuraData != NULL
+endfunction
+
+function RefreshAura takes unit uTarget, integer nAuraId , integer nLevel, real fRefreshTime returns AuraData
+    local AuraData tempAuraData = LoadInteger(auraDataTable,GetHandleId(uTarget),nAuraId)
+    debug call Log("[Auradata-RefreshAura]")
+    if(tempAuraData != NULL) then
+        call tempAuraData.Refresh(nLevel, fRefreshTime)
+    endif
+    return tempAuraData
+endfunction
+
+function AddorRefreshAura takes unit uTarget, integer nAuraId, integer nLevel, real fTime, real fDelay, real fRefreshTime, boolean dependAbility returns AuraData
+   local AuraData tempAuraData = LoadInteger(auraDataTable,GetHandleId(uTarget),nAuraId)
+   if(tempAuraData != NULL)then
+        call tempAuraData.Refresh(nLevel, fRefreshTime)
+   else
+        set tempAuraData = AuraData.create(uTarget,nAuraId,nLevel,fTime,fDelay, dependAbility)
+        call Play(tempAuraData)
+        call SaveInteger(auraDataTable,GetHandleId(uTarget),nAuraId,tempAuraData)
+   endif
+   return tempAuraData
+endfunction
+
+private function Init takes nothing returns nothing
+    set auraDataList = AuraDataList.create()
+    set updateTimer = CreateTimer()
+    call TimerStart(updateTimer,fUpdatePeriod,true,function Update)
+endfunction
+
+endlibrary

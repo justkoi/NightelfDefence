@@ -1,0 +1,226 @@
+library SpawnManager requires SpawnData, Globals, TimeSpan
+
+globals
+    boolean isDebugFastWave = false
+    boolean noSpawn = false
+    SpawnDataList waitingList
+    SpawnDataList spawningList
+    integer lastUndeadWaveUnitCount = 0
+    private constant real fUndeadRegenTime = 19.0 * 1.08
+    private constant real fUndeadRegenTimeIncrease = 2.4 * 1.08
+    
+    private constant real fNightElfRegenTime = 60.0
+    private constant real fNightElfRegenTimeIncrease = 2.0
+    private group undeadWaveUnits = CreateGroup() 
+endglobals
+
+private function GetUndeadTime takes integer level returns real
+    return (fUndeadRegenTime + (fUndeadRegenTimeIncrease * I2R(level)))
+endfunction
+
+private function SetupSpawnList takes nothing returns nothing
+    //call waitingList.Add(OnceSpawnData.create(playerUndead,UnitTypeId.SmallGhoul,8,udg_locUndeadRegenMain,5).SetMessage("Wave 1 Started!",udg_sSoundUndeadStronger))
+    //call waitingList.Add(OnceSpawnData.create(playerUndead,UnitTyp11Id.SmallGhoul,8,udg_locNightElfPoint1,10).SetMessage("Wave 2 Started!",udg_sSoundUndeadStronger))
+    //call waitingList.Add(OnceSpawnData.create(playerUndead,UnitTypeId.SmallGhoul,8,udg_locNightElfPoint1,15).SetMessage("Wave 3 Started!",udg_sSoundUndeadStronger))
+    //Test Skip
+    
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Zergling,             3,udg_locUndeadRegenMain,       GetUndeadTime(0),60*0,60*20, false))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Zergling,             6,udg_locUndeadRegenFirst1,     GetUndeadTime(0),60*0,60*12, false))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Ghoul,                6,udg_locUndeadRegenFirst1,     GetUndeadTime(0),60*0,60*9, false))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Zergling,             6,udg_locUndeadRegenFirst2,     GetUndeadTime(0),60*0,60*6, false))
+    
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.YoungZergling,        3,udg_locUndeadRegenFirst1,     GetUndeadTime(0),60*0,60*6, false))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.YoungZergling,        4,udg_locUndeadRegenFirst2,     GetUndeadTime(0),60*0,60*7, false))
+    
+    //Start
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Ghoul,                6,udg_locUndeadRegenFirst2,     GetUndeadTime(0),60*0,60*3, false))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Ghoul,                2,udg_locUndeadRegenSub,        GetUndeadTime(1),60*1,60*21, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UnbrokenDarkhunter,   3,udg_locUndeadRegenSub3,       GetUndeadTime(2),60*2,60*22, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.SkeletonWarrior,      2,udg_locUndeadRegenMain,       GetUndeadTime(3),60*3,60*23, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Grunt,                3,udg_locUndeadRegenSub,        GetUndeadTime(4),60*4,60*24, true))
+    //5 
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Abomi,                2,udg_locUndeadRegenSub3,       GetUndeadTime(5),60*5,60*25, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.PleageTreant,         2,udg_locUndeadRegenMain,       GetUndeadTime(6),60*6,60*26, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.CryptPiend,           3,udg_locUndeadRegenSub,        GetUndeadTime(7),60*7,60*27, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.BailTomenter,         2,udg_locUndeadRegenSub3,       GetUndeadTime(8),60*8,60*28, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.SkeletonArcher,       3,udg_locUndeadRegenMain,       GetUndeadTime(9),60*9,60*29, true))
+    //10    
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Wraith,               2,udg_locUndeadRegenSub,        GetUndeadTime(10),60*10,60*30, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.SmallVoidWalker,      3,udg_locUndeadRegenSub3,       GetUndeadTime(11),60*11,60*31, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.SmallProstWarm,       2,udg_locUndeadRegenSub2,       GetUndeadTime(12),60*12,60*32, true).ForcedSpawn())
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UndeadHarpy,          2,udg_locUndeadRegenSub2,       GetUndeadTime(13),60*13,60*33, true).ForcedSpawn())
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.NetherDragonHatchling,2,udg_locUndeadRegenSub2,       GetUndeadTime(14),60*14,60*34, true))
+    
+    //15    
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.MeatWagon,            2,udg_locUndeadRegenSub3,       GetUndeadTime(15),60*15,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Destroyer,            2,udg_locUndeadRegenSub2,       GetUndeadTime(16),60*16,60*56, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.FrostWyrm,            1,udg_locUndeadRegenSub2,       GetUndeadTime(17),60*17,60*81, true).ForcedSpawn())
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UndeadBandit,         2,udg_locUndeadRegenMain,       GetUndeadTime(18),60*18,60*58, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.FearfulAbomi,         2,udg_locUndeadRegenSub,        GetUndeadTime(9),60*19,60*81, true))
+    //20    
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UndeadCobolt         ,3,udg_locUndeadRegenSub3,       GetUndeadTime(0),60*20,60*40, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Gnoll                ,3,udg_locUndeadRegenMain,       GetUndeadTime(1),60*21,60*41, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UndeadDraeneiGardiun ,3,udg_locUndeadRegenSub,        GetUndeadTime(2),60*22,60*42, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Raider               ,3,udg_locUndeadRegenSub3,       GetUndeadTime(3),60*23,60*43, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.DarkTroll            ,3,udg_locUndeadRegenMain,       GetUndeadTime(4),60*24,60*44, true))
+    //25                                                                                                                    
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.BloodPiend           ,2,udg_locUndeadRegenSub,        GetUndeadTime(5),60*25,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UndeadCentaurKhan    ,1,udg_locUndeadRegenSub3,       GetUndeadTime(6),60*26,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UndeadCentaurArcher  ,3,udg_locUndeadRegenMain,       GetUndeadTime(7),60*27,60*47, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UndeadAssassin       ,3,udg_locUndeadRegenSub,        GetUndeadTime(8),60*28,60*48, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.FireRevenant         ,3,udg_locUndeadRegenSub3,       GetUndeadTime(9),60*29,60*49, true))
+    //30                                                                                                                    
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.IceRevenant          ,2,udg_locUndeadRegenMain,       GetUndeadTime(10),60*30,60*50, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.DeathRevenant        ,3,udg_locUndeadRegenSub,        GetUndeadTime(11),60*31,60*51, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Gargoyle             ,2,udg_locUndeadRegenSub2,       GetUndeadTime(12),60*32,60*81, true).ForcedSpawn())
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.UndeadHarpyQueen     ,2,udg_locUndeadRegenSub2,       GetUndeadTime(13),60*33,60*53, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.NetherDrake          ,1,udg_locUndeadRegenSub2,       GetUndeadTime(14),60*34,60*81, true).ForcedSpawn())
+    //40 EliteIceRevenat regen for moevement prevent
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.EliteIceRevenant     ,1,udg_locUndeadRegenMain,       GetUndeadTime(14),60*40,60*81, true))
+    //35~40Skiped                                                                                                           
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.OrgeWarrior          ,2,udg_locUndeadRegenSub3,       GetUndeadTime(0),60*40,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.NerubianWarrior      ,3,udg_locUndeadRegenSub,        GetUndeadTime(1),60*41,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Acolyte              ,2,udg_locUndeadRegenMain,       GetUndeadTime(2),60*42,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.MurlocTideRunner     ,3,udg_locUndeadRegenSub,        GetUndeadTime(3),60*43,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.MurlocAssassin       ,2,udg_locUndeadRegenSub3,       GetUndeadTime(4),60*44,60*81, true))
+    //45    
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.VeryFealfulAbomi     ,2,udg_locUndeadRegenMain,       GetUndeadTime(9),60*45,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.HidraHatchling       ,3,udg_locUndeadRegenSub,        GetUndeadTime(11),60*46,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.EliteCryptPiend      ,2,udg_locUndeadRegenSub3,       GetUndeadTime(7),60*47,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.EliteSkeletonArcher  ,3,udg_locUndeadRegenMain,       GetUndeadTime(8),60*48,60*81, true))
+    //call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.IceRevenant          ,2,udg_locUndeadRegenMain,   29,60*34,60*54))
+    //50
+    //call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.IceRevenant          ,2,udg_locUndeadRegenMain,   29,60*30,60*50))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.BigVoidWalker        ,3,udg_locUndeadRegenSub,    GetUndeadTime(12),60*52,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Banshee              ,2,udg_locUndeadRegenSub3,   GetUndeadTime(13),60*53,60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.NetherDragon         ,2,udg_locUndeadRegenSub2,   GetUndeadTime(14),60*54,60*81, true).ForcedSpawn())
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.BlackDragon          ,1,udg_locUndeadRegenSub2,   GetUndeadTime(15),60*55,60*81, true).ForcedSpawn())
+    //55
+    
+    
+    
+    /*
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Wraith,2,udg_locUndeadRegenSub3,24,60*15,60*35))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Wraith,2,udg_locUndeadRegenSub3,24,60*16,60*36))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Wraith,2,udg_locUndeadRegenSub3,24,60*17,60*37))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Wraith,2,udg_locUndeadRegenSub3,24,60*18,60*38))
+    call waitingList.Add(LoopSpawnData.create(playerUndead,UnitTypeId.Wraith,2,udg_locUndeadRegenSub3,24,60*19,60*39))*/
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.Treant                ,2,udg_locNightElfRegenMain1,   65,60*0,     60*11, false))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.Treant                ,2,udg_locNightElfRegenMain1,   67,60*0,     60*11, false))
+    
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.Treant                ,2,udg_locNightElfRegenMain1,   68,60*0,     60*30, false))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.Huntress              ,2,udg_locNightElfRegenMain1,   70,60*3,     60*33, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.Archer                ,2,udg_locNightElfRegenMain1,   72,60*6,     60*36, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.Warden                ,2,udg_locNightElfRegenMain1,   74,60*9,     60*39, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.Dryad                 ,2,udg_locNightElfRegenMain1,   76,60*12,    60*42, true))
+                                                                                              
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.DruidOfTalen          ,1,udg_locNightElfRegenMain1,   78,60*15,     60*45, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.MountainJaiunt        ,1,udg_locNightElfRegenMain1,   80,60*18,     60*48, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.HyphoGreepRaider      ,1,udg_locNightElfRegenAir,     82,60*21,     60*51, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.FairyDragon           ,1,udg_locNightElfRegenAir,     84,60*24,     60*54, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.Kimera                ,1,udg_locNightElfRegenAir,     120,60*27,     60*57, true))
+                                                                                              
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorTreant          ,2,udg_locNightElfRegenMain1,   68,60*30,     60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorHuntress        ,2,udg_locNightElfRegenMain1,   70,60*33,     60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorArcher          ,2,udg_locNightElfRegenMain1,   72,60*36,     60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorWarden          ,2,udg_locNightElfRegenMain1,   74,60*39,     60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorDryad           ,2,udg_locNightElfRegenMain1,   76,60*42,     60*81, true))
+                                                                                                                              
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorDruidOfTalen    ,1,udg_locNightElfRegenMain1,   78,60*45,     60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorMountainJaiunt  ,1,udg_locNightElfRegenMain1,   80,60*48,     60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorHyphoGreepRaider,1,udg_locNightElfRegenAir,     82,60*51,     60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorFairyDragon     ,1,udg_locNightElfRegenAir,     84,60*54,     60*81, true))
+    call waitingList.Add(LoopSpawnData.create(playerNightElf,UnitTypeId.SeniorKimera          ,1,udg_locNightElfRegenAir,     120,60*57,     60*81, true))
+    
+    //60분부터 강력한 유닛 출전 70분까지 1분단위로 갱신
+    
+    //debug call Log("GetPlayerId "+IntToString(GetPlayerId(playerUndead)))
+    //debug call Log("GetLocationPos "+R2S(GetLocationX(udg_locUndeadRegenMain))+","+R2S(GetLocationY(udg_locUndeadRegenMain))+","+R2S(GetLocationZ(udg_locUndeadRegenMain)) )
+    //debug call Log("waitingList.Count"+IntToString(waitingList.Count))
+endfunction
+
+private function isUndeadWaveGroup takes nothing returns boolean
+    local unit uTemp = GetFilterUnit()
+    local boolean result = true
+    if(IsUnitType(uTemp, UNIT_TYPE_HERO) == true) then
+        set uTemp = null
+        return false
+    endif
+    
+    if(IsUnitType(uTemp, UNIT_TYPE_STRUCTURE) == true) then
+        set uTemp = null
+        return false
+    endif
+    
+    if(IsUnitType(uTemp, UNIT_TYPE_FLYING) == true) then
+        set uTemp = null
+        return false
+    endif
+    set uTemp = null
+    return true
+endfunction
+
+private function Update takes nothing returns nothing
+    local SpawnDataNode iter = NULL
+    local SpawnData data = NULL
+    
+    //debug call Log("[SpawnManager-UpdateS]")
+    ///대기 리스트에 있는 스폰데이터를 대상으로 스폰 준비가 되었으면 스폰을 시작합니다.
+    set iter = waitingList.head
+    loop
+        exitwhen not( iter != NULL )
+            //debug call Log(IntToString(i)+"<"+IntToString(waitingList.Count))
+            set data = iter.data
+            if(data.isReadyToSpawn() or isDebugFastWave) then
+                set iter = waitingList.RemoveNode(iter)
+                if not(data.isSpawnOnce) then
+                    call spawningList.Add(data)
+                endif
+                call data.StartSpawn()
+            else
+                set iter = iter.next
+            endif
+    endloop
+    
+    call GroupEnumUnitsOfPlayer(undeadWaveUnits, playerUndead, Condition(function isUndeadWaveGroup))
+    set lastUndeadWaveUnitCount = CountUnitsInGroup(undeadWaveUnits)
+    debug call Log("[UndeadUnitCount] "+IntToString(lastUndeadWaveUnitCount))
+    
+    set iter = spawningList.head
+    loop
+        exitwhen not( iter != NULL )
+            set data = iter.data
+            if(data.isExpired()) then
+                call data.destroy()
+                set iter = spawningList.RemoveNode(iter)
+            else
+                set iter = iter.next
+            endif
+    endloop
+    
+    call GroupClear(undeadWaveUnits)
+    
+    //debug call Log("spawningList.Count = "+IntToString(spawningList.Count))
+    //debug call Log("[SpawnManager-UpdateE]")
+endfunction
+
+private function Init takes nothing returns nothing
+    local timer timerUpdate = CreateTimer()
+    //debug call Log("[SpawnManager-InitS]")
+    call TimerStart(timerUpdate, 1.0, true, function Update)
+    set waitingList = SpawnDataList.create()
+    set spawningList = SpawnDataList.create()
+    if(not noSpawn) then
+        call SetupSpawnList()
+    endif
+    //debug call Log("[SpawnManager-InitE]")
+    set timerUpdate = null
+endfunction
+
+function InitTrig_SpawnManager takes nothing returns nothing
+    local trigger t = CreateTrigger(  )
+    call TriggerRegisterTimerEventSingle( t, 1 )
+    call TriggerAddAction( t, function Init )
+endfunction
+
+endlibrary

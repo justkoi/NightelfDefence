@@ -1,0 +1,35 @@
+scope RegenInjuredKinght initializer Init
+
+globals
+    private integer unitTypeId = 'h01H'
+endglobals
+
+private function Regen takes nothing returns nothing
+    local Injured RedDragon
+    //If Has AnyUnits of PLAYER_NEUTRAL_PASSIVE return
+    if ( CountUnitsInGroup(GetUnitsOfPlayerAndTypeId(Player(PLAYER_NEUTRAL_PASSIVE), unitTypeId)) > 0 ) then
+        return
+    endif
+    
+    //부상당한 기사단장, 기사단장 소환서
+    set  RedDragon = Injured.create(unitTypeId, 'I05S', GetRandomLocInRect(gg_rct_CampInjured1), 150.0)
+    call RedDragon.AddStartMsg(Color.MainNoti+"기사단장 아이모|r : 나를 좀 도와줄 수 있겠나? 우리 기사단이 본대로 귀환하던 도중 큰 폭풍우를 만나 배가 난파되어 부상을 입고 말았네.\n"+Color.SubNoti+"(기사단장이 치료를 요청합니다.)|r")
+    call RedDragon.AddEndMsg(Color.MainNoti+"기사단장 아이모|r : 도와주어서 고맙네. 언젠가 다시 볼일이 있었으면 좋겠네.\n"+Color.SubNoti+"(기사단장은 감사인사를 끝으로 멀리 사라졌다.)|r")
+    call RedDragon.AddOnClear(RegenInjuredKinght_onInjuredClear)
+    
+endfunction
+
+private function Init takes nothing returns nothing
+    local timer t = CreateTimer()
+    call TimerStart(t, 800, true, function Regen)
+    //40
+endfunction
+
+public function onInjuredClear takes unit data returns nothing
+    call PlaySoundOnUnitBJ( gg_snd_KnightYes4, 100.0, data)
+    call PlaySoundOnUnitBJ( gg_snd_HorseLoop1, 100.0, data)
+    call PlaySoundOnUnitBJ( gg_snd_KnightNoRiderYesAttack1, 100.0, data)
+endfunction
+endscope
+
+

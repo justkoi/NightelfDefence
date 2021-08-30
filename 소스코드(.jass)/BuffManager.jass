@@ -1,0 +1,52 @@
+library BuffManager needs Debug
+globals
+    private hashtable freezeUnitDic = InitHashtable()
+endglobals
+function AddStunUnit takes unit uTarget, integer nDuration returns nothing
+    //call Log("WTF IS THIS")
+    if(uTarget == null) then
+        return
+    endif
+    set udg_locTemp = GetUnitLoc(uTarget)
+    call CreateNUnitsAtLoc( 1, 'h01N', Player(bj_PLAYER_NEUTRAL_VICTIM), udg_locTemp, bj_UNIT_FACING )
+    if (nDuration == 1) then
+        call UnitAddAbilityBJ( 'A0EO', GetLastCreatedUnit() )
+    endif
+    call UnitApplyTimedLife( GetLastCreatedUnit(), 'B00I', 5 )
+    call IssueTargetOrder( GetLastCreatedUnit(), "firebolt", uTarget)
+    call RemoveLocation( udg_locTemp )
+endfunction
+
+function FreezeCallback takes nothing returns nothing
+    local unit uTarget = LoadUnitHandle(freezeUnitDic,1,GetTimerData(GetExpiredTimer()))
+    if(uTarget != null) then
+        call SetUnitTimeScalePercent(uTarget,100)
+    endif
+    call RemoveSavedHandle(freezeUnitDic,1,GetTimerData(GetExpiredTimer()))
+    call ReleaseTimer(GetExpiredTimer())
+    set uTarget = null
+endfunction
+
+function AddFreezeUnit takes unit uTarget, integer nDuration returns nothing
+    if(uTarget == null) then
+        return
+    endif
+    
+    if(isUnitDead(uTarget)) then
+        debug call Log("[AddFreezeUnit] Already Dead!")
+        return
+    endif
+    
+    set udg_locTemp = GetUnitLoc(uTarget)
+    call CreateNUnitsAtLoc( 1, 'h01N', Player(bj_PLAYER_NEUTRAL_VICTIM), udg_locTemp, bj_UNIT_FACING )
+    call UnitAddAbilityBJ( 'A01A', GetLastCreatedUnit() )
+    call SetUnitAbilityLevel(GetLastCreatedUnit(),'A01A',nDuration)
+    call UnitApplyTimedLife( GetLastCreatedUnit(), 'B00I', 5 )
+    call IssueTargetOrder( GetLastCreatedUnit(), "firebolt", uTarget)
+    call RemoveLocation( udg_locTemp )
+    call SetUnitTimeScalePercent(uTarget,0)
+    call SaveUnitHandle(freezeUnitDic,1,GetHandleId(uTarget),uTarget)
+    call TimerStart(NewTimerEx(GetHandleId(uTarget)), I2R(nDuration), false, function FreezeCallback)
+endfunction
+
+endlibrary

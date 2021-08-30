@@ -1,0 +1,37 @@
+scope RegenInjuredArcher initializer Init
+
+globals
+    private integer unitTypeId = 'n052'
+    private integer itemId = 'I05U'
+    private real level = 100.0
+endglobals
+
+private function Regen takes nothing returns nothing
+    local Injured InjuredUnit
+    //If Has AnyUnits of PLAYER_NEUTRAL_PASSIVE return
+    
+    if ( CountUnitsInGroup(GetUnitsOfPlayerAndTypeId(Player(PLAYER_NEUTRAL_PASSIVE), unitTypeId)) > 0) then
+        return
+    endif
+    
+    //부상당한 공성대원, 공성대원 소환서
+    set  InjuredUnit = Injured.create(unitTypeId, itemId, GetRandomLocInRect(gg_rct_CampInjuredArcher), level)
+    call InjuredUnit.AddStartMsg(Color.MainNoti+"레이첼|r : 거기 용사님 저 좀 도와주시겠어요? 숲 속을 탐험하다 괴물에게 당해서 다리에 큰 부상을 입었지 뭐에요. \n"+Color.SubNoti+"(레이첼이 치료를 요청합니다.)|r")
+    call InjuredUnit.AddEndMsg(Color.MainNoti+"레이첼|r : 고마워요~ 필요하면 언제든 나를 불러요.")
+    call InjuredUnit.AddOnClear(RegenInjuredArcher_onInjuredClear)
+    call InjuredUnit.SetSound(true)
+    
+endfunction
+
+private function Init takes nothing returns nothing
+    local timer t = CreateTimer()
+    call TimerStart(t, 900, true, function Regen)
+    //40
+endfunction
+
+public function onInjuredClear takes unit data returns nothing
+    
+endfunction
+endscope
+
+

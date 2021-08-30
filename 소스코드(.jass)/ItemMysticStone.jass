@@ -1,0 +1,70 @@
+scope ItemMysticStone initializer Init 
+
+globals
+    private location array m_locStartAt[13]
+    private location array m_locEndAt[13]
+endglobals
+
+private function OnSpellStart takes nothing returns nothing
+    local unit uTemp = GetTriggerUnit()
+    local location locUnit = GetUnitLoc(uTemp)
+    local location locTarget = GetSpellTargetLoc()
+    local location locStartAt = PolarProjectionBJ(locUnit,130,AngleBetweenPoints(locUnit,locTarget))
+    local location locEndAt = PolarProjectionBJ(locTarget,130,AngleBetweenPoints(locUnit,locTarget))
+    
+    set m_locStartAt[GetPlayerId(GetOwningPlayer(uTemp))] = locStartAt
+    set m_locEndAt[GetPlayerId(GetOwningPlayer(uTemp))] = locEndAt
+    
+    set uTemp = null
+    call RemoveLocation(locUnit)
+    call RemoveLocation(locTarget)
+    set locUnit = null
+    set locTarget = null
+endfunction
+
+private function OnSpellFinish takes nothing returns nothing
+    local unit uTemp = GetTriggerUnit()
+    local location locStartToEnd = null
+    set locStartToEnd = MysticDoor.create(m_locStartAt[GetPlayerId(GetOwningPlayer(uTemp))], m_locEndAt[GetPlayerId(GetOwningPlayer(uTemp))], 30.0).locStartToEnd
+    call UnitMoveToLoc(uTemp, locStartToEnd)
+    set uTemp = null
+endfunction
+
+private function CheckSpellCode takes nothing returns boolean
+    if(GetSpellAbilityId() != 'A0ED') then
+        return false
+    endif
+    
+    if ( not ( DistanceBetweenPoints(GetUnitLoc(GetTriggerUnit()), GetSpellTargetLoc()) >= 800.00 ) ) then
+        call IssueImmediateOrderBJ( GetTriggerUnit(), "stop" )
+        call DisplayTimedTextToForce( GetForceOfPlayer(GetOwningPlayer(GetTriggerUnit())), 3.00, "TRIGSTR_624" )
+        return false
+    endif
+    return true
+endfunction
+
+private function OnSpellCheck takes nothing returns nothing
+    if ( CheckSpellCode() == false ) then
+        return
+    endif
+    
+    call OnSpellStart()
+endfunction
+
+private function OnSpellCheck2 takes nothing returns nothing
+    if ( CheckSpellCode() == false ) then
+        return
+    endif
+    
+    call OnSpellFinish()
+endfunction
+private function Init takes nothing returns nothing
+    local trigger t2 = CreateTrigger(  )
+    local trigger t = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ(  t2, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction(  t2, function OnSpellCheck )
+    call TriggerRegisterAnyUnitEventBJ(  t, EVENT_PLAYER_UNIT_SPELL_FINISH )
+    call TriggerAddAction(  t, function OnSpellCheck2 )
+endfunction
+
+endscope

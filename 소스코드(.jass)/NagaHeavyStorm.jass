@@ -1,0 +1,596 @@
+library NagaHeavyStorm needs EffectManager, String
+
+globals
+    private real fEffectTime = 2.0
+    private constant real fTickTime = 0.2
+    private constant real fKnockBackTime = fTickTime - 0.05
+    //private constant real damage = 660
+    private real fSpellingTime = fEffectTime + (fTickTime * 16) + 1.9 + 0.3 //스펠타임 일찎끝나면 g_locLastEffectStorm 증발해서 0,0으로 캐릭터 이동하는 버그가 있을수있음 15개 현재
+    location g_locLastEffectStorm = null
+endglobals
+
+function OnDamageHeavyStorm takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    local real distance = 0
+    local real additional = 0
+    local location locEffect
+    local location locSairen
+    local location locTarget
+    local location locVictim
+    local real angle = 0
+    local string SavedString 
+    
+    //debug call Log("[OnDamageRichSkill4]")
+    if(g_uSairen == null) then
+        return
+    endif
+    
+    if(isUnitDead(g_uSairen)) then
+        return
+    endif
+    
+    set locEffect = Location(vEffectPos.x,vEffectPos.y)
+    
+    //포인터로 땡겨오니까 삭제하면 원본이 지워짐 조심
+    if(g_locLastEffectStorm != null) then
+        set locSairen = Location(GetLocationX(g_locLastEffectStorm),GetLocationY(g_locLastEffectStorm))
+    else
+        set locSairen = GetUnitLoc(g_uSairen)
+    endif
+        
+    
+   // debug call Log("[1-1] g_locLastEffectStorm = " + GetLocationString(g_locLastEffectStorm))
+    //debug call Log("[1-1] g_uSairen = " + GetLocationString(GetUnitLoc(g_uSairen)))
+   //debug call Log("[1-1] locEffect = " + GetLocationString(locEffect))
+   //set distance = DistanceBetweenPoints(locSairen,locEffect)
+    //debug call Log("[1-1]Distance = " + R2S(distance))
+    
+    set angle = AngleBetweenPoints(locEffect, locSairen)//Effect To Siren
+    set locTarget = PolarProjectionBJ(locEffect,200,angle)
+    //누수제거
+    loop
+        exitwhen not(iter != NULL)
+           // set distance = DistanceBetweenUnits(iter.data, g_uSairen)
+           // set additional = 0
+           // if(distance < 200) then
+            //    set additional = 200
+           // endif
+           //     set distance = GetRemainder(distance, 200)
+           //     debug call Log("[PN]Distance = " + R2S(distance))
+          //      set distance = (distance + 10) + additional
+                set locVictim = GetUnitLoc(iter.data)
+                set distance = DistanceBetweenPoints(locVictim,locTarget)
+                if(not isUnitKnockBackImmune(iter.data)) then
+                    call PlayMovementToLoc(iter.data,CopyLoc(locSairen),false,distance*0.7,distance*0.3,fKnockBackTime,false,false,true)
+                endif
+                
+                if(not IsUnitMagicImmune(iter.data)) then
+                    call AddSpecialEffectTargetUnitBJ( "origin", iter.data, "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" )
+                    call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+                endif
+                
+                call RemoveLocation(locVictim)
+                set locVictim = null
+            //endif
+            set iter = iter.next
+    endloop
+    
+    call RemoveLocation(locEffect)
+    call RemoveLocation(locSairen)
+    set locEffect = null
+    set locSairen = null
+    set locTarget = null
+    
+endfunction
+
+function OnDamageHeavyStorm2 takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    local real distance = 0
+    local real additional = 0
+    local location locEffect
+    local location locSairen
+    local location locTarget
+    local location locVictim
+    local real angle = 0
+    
+    //debug call Log("[OnDamageRichSkill4]")
+    if(g_uSairen == null) then
+        return
+    endif
+    
+    if(isUnitDead(g_uSairen)) then
+        return
+    endif
+    
+    set locEffect = Location(vEffectPos.x,vEffectPos.y)
+    if(g_locLastEffectStorm != null) then
+        set locSairen = Location(GetLocationX(g_locLastEffectStorm),GetLocationY(g_locLastEffectStorm))
+    else
+        set locSairen = GetUnitLoc(g_uSairen)
+    endif
+    
+    //debug call Log("[2-1] g_locLastEffectStorm = " + GetLocationString(g_locLastEffectStorm))
+    //debug call Log("[2-1] g_uSairen = " + GetLocationString(GetUnitLoc(g_uSairen)))
+    //debug call Log("[2-1] locEffect = " + GetLocationString(locEffect))
+    
+    set distance = DistanceBetweenPoints(locSairen,locEffect)
+    //debug call Log("[2-1] Distance = " + R2S(distance))
+    
+    set angle = AngleBetweenPoints(locSairen, locEffect)
+    set locTarget = PolarProjectionBJ(locEffect,200,angle)
+    //누수제거
+    
+    loop
+        exitwhen not(iter != NULL)
+           // set distance = DistanceBetweenUnits(iter.data, g_uSairen)
+           // set additional = 0
+           // if(distance < 200) then
+            //    set additional = 200
+           // endif
+           //     set distance = GetRemainder(distance, 200)
+           //     debug call Log("[PN]Distance = " + R2S(distance))
+          //      set distance = (distance + 10) + additional
+                set locVictim = GetUnitLoc(iter.data)
+                set distance = DistanceBetweenPoints(locVictim,locTarget)
+                if(distance >= 10000) then
+                    //call FLog("[2-2]Distance = " + R2S(distance))
+                    //call FLog("[2-2]locVictim = " + GetLocationString(locVictim))
+                    //call FLog("[2-2]locTarget = " + GetLocationString(locTarget))
+                endif
+                if(not isUnitKnockBackImmune(iter.data)) then
+                    call PlayMovementToLoc(iter.data,CopyLoc(locSairen),true,distance*0.7,distance*0.3,fKnockBackTime,false,false,true)
+                endif
+                
+                if(not IsUnitMagicImmune(iter.data)) then
+                    call AddSpecialEffectTargetUnitBJ( "origin", iter.data, "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" )
+                    call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+                endif
+                
+                call RemoveLocation(locVictim)
+                set locVictim = null
+            //endif
+            set iter = iter.next
+    endloop
+    
+    call RemoveLocation(locEffect)
+    call RemoveLocation(locSairen)
+    call RemoveLocation(locTarget)
+    set locEffect = null
+    set locSairen = null
+    set locTarget = null
+    
+    //call list.Dump()
+endfunction
+
+struct NagaHeavyStorm extends AISpell
+    public real damage
+    public static AISpell filterSpell = NULL
+    public static method create takes real fCooldownTimeBase, unit uOwner, real damage returns thistype
+        local thistype this = thistype.allocate()
+        set this.fCooldownTimer = fCooldownTimeBase
+        set this.fCooldownTimeBase = fCooldownTimeBase
+        set this.fCooldownTime = fCooldownTimeBase
+        set this.uOwner = uOwner
+        set this.isSpelling = false
+        set this.fMpCost = 50
+        set this.damage = damage
+        return this
+    endmethod
+    
+    public method Play takes real dt returns nothing
+        if(isCooldown()) then
+            set fCooldownTimer = fCooldownTimer + dt
+        endif
+        if(CanUseSpell()) then
+            call StartSpell()
+            call AISpellManager_AddSpellUnit(uOwner)
+        endif
+    endmethod
+
+    public method isCooldown takes nothing returns boolean
+        return (fCooldownTimer < fCooldownTime)
+    endmethod
+    
+    public static method isTargetUnit takes nothing returns boolean
+        if(not IsUnitEnemy(GetFilterUnit(),GetOwningPlayer(filterSpell.uOwner))) then
+            return false
+        endif
+        if(not IsUnitType(GetFilterUnit(),UNIT_TYPE_HERO)) then
+            return false
+        endif
+        if(isUnitDead(GetFilterUnit())) then
+            return false
+        endif
+        return true
+    endmethod
+    
+    public method hasCost takes nothing returns boolean
+        return GetUnitMp(uOwner) > fMpCost
+    endmethod
+    
+    public method UseCost takes nothing returns nothing
+        call SetUnitMp(uOwner, GetUnitMp(uOwner) - fMpCost)
+    endmethod
+    
+    public method CanUseSpell takes nothing returns boolean
+        local UnitList list = NULL
+        local Vector3 vPos = NULL
+        local boolean targetDetected = false
+        if(isCooldown()) then
+            return false
+        endif
+    
+        if(isSpelling) then
+            return false
+        endif
+
+        if(not hasCost()) then
+            return false
+        endif
+        
+        if(AISpellManager_isUnitSpelling(uOwner)) then
+            return false
+        endif
+        
+        set filterSpell = this
+        set list = CreateUnitListInRangeByUnit(uOwner, 800, Filter(function NagaHeavyStorm.isTargetUnit))
+        
+        set targetDetected = not list.isEmpty()
+        
+        call list.destroy()
+        
+        return targetDetected
+    endmethod
+    
+    
+    public method StartSpell takes nothing returns nothing
+        local timer spellingTimer = NewTimerEx(this)
+        local timer effectTimer = NewTimerEx(this)
+        
+        call IssueImmediateOrder(uOwner,"channel")
+        call DisplayTimedTextToForce( udg_GroupPlayer, udg_fBossDisplayTime, "TRIGSTR_5416" )
+        call PlaySoundBJ( gg_snd_NagaSirenYesAttack1 )
+    
+        set g_uSairen = uOwner
+        
+        call UseCost()
+        set isSpelling = true
+        
+        call TimerStart(effectTimer, fEffectTime, false, function thistype.OnSpellEffect)
+        call TimerStart(spellingTimer, fSpellingTime, false, function thistype.OnSpellEnd)
+        set spellingTimer = null
+        set effectTimer = null
+    endmethod
+    
+    public static method GetRingNumber takes real fDistance returns integer
+        local real ringPerRadius = 3
+        return R2I((fDistance/200.0)*ringPerRadius+ringPerRadius)
+    endmethod
+    
+    public static method OnSpellEffect takes nothing returns nothing
+        local NagaHeavyStorm skillData = GetTimerData(GetExpiredTimer())
+        local integer i = 0
+        local EffectData data = NULL
+        local AttackHit attackHit = NULL
+        local Vector3 vPos = NULL
+        local unit uSairen = skillData.uOwner
+        local location locSairen = GetUnitLoc(uSairen)
+        local real fDistance = 1200
+        local real fAngle = 0
+        local location locTemp = null
+        local integer level = 0
+        local integer number = 23
+        local real effectRange = 200
+        local real damage = skillData.damage
+        
+        set g_locLastEffectStorm = GetUnitLoc(uSairen)
+        //debug call Log("[A] g_locLastEffectStorm = " + GetLocationString(g_locLastEffectStorm))
+    
+        //원->근
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //1000
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //800
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //600
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //400
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = 200 //200
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm2)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        //근->원
+        set i = 0
+        set fDistance = fDistance + 200//400
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm2)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+
+        set i = 0
+        set fDistance = fDistance + 200//600
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm2)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+
+
+        set i = 0
+        set fDistance = fDistance + 200//800
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm2)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+
+        set i = 0
+        set fDistance = fDistance + 200//1000
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm2)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = 1400//1400
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200//1200
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200//1000
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200//800
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200//600
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200//400
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uSairen,effectRange,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamageHeavyStorm)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+    endmethod
+    public static method OnSpellEnd takes nothing returns nothing
+         local NagaHeavyStorm data = GetTimerData(GetExpiredTimer())
+         call data.EndSpell()
+         call AISpellManager_RemoveSpellUnit(data.uOwner)
+         if(g_locLastEffectStorm != null) then
+            call RemoveLocation(g_locLastEffectStorm)
+            set g_locLastEffectStorm = null
+         endif
+        //debug call Log("[B] g_locLastEffectStorm = " + GetLocationString(g_locLastEffectStorm))
+         call ReleaseTimer(GetExpiredTimer())
+    endmethod
+    
+    public method EndSpell takes nothing returns nothing
+        set isSpelling = false
+        call ResetCooldown()
+    endmethod
+    
+    public method ResetCooldown takes nothing returns nothing
+        set fCooldownTimer = fCooldownTimer - fCooldownTime
+        //-1~+1초 랜덤
+        set fCooldownTime = fCooldownTimeBase + (GetRandomReal(0,2) - 1) 
+    endmethod
+    
+    public method isExpired takes nothing returns boolean
+        if(isUnitDead(uOwner)) then
+            return true
+        endif
+        return false
+    endmethod
+    
+    public method onDestroy takes nothing returns nothing
+        set uOwner = null
+    endmethod
+endstruct
+
+endlibrary

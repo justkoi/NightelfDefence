@@ -1,0 +1,49 @@
+library AISpellManager initializer Init requires TimerUtils, LinkedList
+
+globals
+    AISpellList spellList
+    private constant real fUpdatePeriod = 0.04
+    public group SpellUnitGroup = CreateGroup()
+endglobals
+
+
+private function Update takes nothing returns nothing
+    local AISpellNode iter = spellList.head
+    local AISpell spell = NULL
+    loop
+        exitwhen not(iter != NULL)
+            set spell = iter.data
+            if(spell.isExpired()) then
+                call spell.destroy()
+                set iter = spellList.RemoveNode(spell)
+            else
+                call spell.Play(fUpdatePeriod)
+                set iter = iter.next
+            endif
+    endloop
+endfunction
+
+public function AddSpell takes AISpell spell returns nothing
+    call spellList.Add(spell)
+endfunction
+
+public function AddSpellUnit takes unit uTarget returns nothing
+    call GroupAddUnit(SpellUnitGroup, uTarget)
+endfunction
+
+public function RemoveSpellUnit takes unit uTarget returns nothing
+    call GroupRemoveUnit(SpellUnitGroup, uTarget)
+endfunction
+
+public function isUnitSpelling takes unit uTarget returns boolean
+    return IsUnitInGroup(uTarget, SpellUnitGroup)
+endfunction
+
+private function Init takes nothing returns nothing
+    local timer updateTimer = CreateTimer()
+    set spellList = AISpellList.create()
+    call TimerStart(updateTimer, fUpdatePeriod, true, function Update)
+    set updateTimer = null
+endfunction
+
+endlibrary

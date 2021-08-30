@@ -1,0 +1,45 @@
+library SpellManager initializer Init requires Spell
+
+globals
+    private SpellList spellList
+    private timer timerUpdate = null
+    private constant real fUpdatePeriod = 0.04
+endglobals
+
+private function Update takes nothing returns nothing
+   local SpellNode iter = spellList.head
+    local Spell data = NULL
+    //debug call Log("spellList.Count " + I2S(spellList.Count))
+    //debug call Log("healingLightning " + I2S(healingLightning))
+    loop
+        exitwhen not(iter != NULL)
+            set data = iter.data
+            ///지연된 Stopped 처리에 의해 필요합니다.
+            if(data.isExpired(fUpdatePeriod)) then
+                call data.destroy()
+                set iter = spellList.RemoveNode(iter)
+            else
+                call data.Play(fUpdatePeriod)
+                ///플레이후에 Timer에 의해 필요합니다.
+                if(data.isExpired(fUpdatePeriod)) then
+                    call data.destroy()
+                    set iter = spellList.RemoveNode(iter)
+                else
+                    set iter = iter.next
+                endif
+            endif
+    endloop
+endfunction
+
+function PlaySpell takes Spell spell returns nothing
+    call spell.StartSpell()
+    call spellList.Add(spell)
+endfunction
+
+private function Init takes nothing returns nothing
+    set spellList = SpellList.create()
+    set timerUpdate = CreateTimer()
+    call TimerStart(timerUpdate, fUpdatePeriod, true, function Update)
+endfunction
+
+endlibrary 

@@ -1,0 +1,123 @@
+library ItemChargeSystem initializer Init needs Plant
+
+globals
+    private hashtable ItemMaxTable = null
+endglobals
+
+private function isInTable takes nothing returns boolean
+    local integer nMax = LoadInteger(ItemMaxTable, GetItemTypeId(GetManipulatedItem()), 0)
+   //call FLog(GetItemName(GetManipulatedItem()) + " nMax = "+I2S(nMax))
+    if ( nMax > 1 ) then
+        return true
+    endif
+    return false
+endfunction
+
+private function Action takes nothing returns nothing
+    local item newItem = GetManipulatedItem()
+    local item slotItem = null
+    local integer i = 0
+    local integer value = 0
+    local integer nSlotItemNumber = 0
+    local integer nNewItemNumber = 0
+    local integer nMaxCharge = LoadInteger(ItemMaxTable, GetItemTypeId(newItem), 0)
+    
+    set nNewItemNumber = GetItemNumber(newItem)
+    //call FLog("[GetItem] Name: "+GetItemName(newItem)+",Id: "+I2S(GetItemTypeId(newItem))+", Number: "+I2S(nNewItemNumber))
+    
+    loop
+    exitwhen not(i<6)
+        set slotItem = UnitItemInSlot(GetTriggerUnit(), i)
+        if(slotItem != null)then
+            //call FLog("newItem Handle ["+I2S(GetHandleId(newItem))+"] == slotItem Handle ["+I2S(GetHandleId(slotItem))+"]")
+            //call FLog(I2S(i) + " slotItem = " + GetItemName(slotItem))
+            if(GetItemTypeId(newItem) == GetItemTypeId(slotItem) and GetHandleId(newItem) != GetHandleId(slotItem))then
+                set nSlotItemNumber = GetItemNumber(slotItem)
+                if(nSlotItemNumber < nMaxCharge) then
+                    set value = MinInt(nMaxCharge - nSlotItemNumber, nNewItemNumber)
+                    call SetItemCharges(slotItem, nSlotItemNumber + value)
+                    set nNewItemNumber = nNewItemNumber - value
+                    exitwhen (nNewItemNumber == 0)
+                endif
+            endif
+        endif
+        set i = i +1
+    endloop
+    
+    if(nNewItemNumber == 0) then
+        call RemoveItem(newItem)
+    else
+        call SetItemCharges(newItem, nNewItemNumber)
+    endif
+    
+    set newItem = null
+    set slotItem = null
+endfunction
+
+private function AddMaxTable takes integer itemId, integer nMax returns nothing
+    call SaveInteger(ItemMaxTable,itemId,0,nMax)
+endfunction
+
+//===========================================================================
+private function Init takes nothing returns nothing
+    set gg_trg_GainItem = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_GainItem, EVENT_PLAYER_UNIT_PICKUP_ITEM )
+    call TriggerAddCondition( gg_trg_GainItem, Condition( function isInTable ) )
+    call TriggerAddAction( gg_trg_GainItem, function Action )
+    
+    set ItemMaxTable = InitHashtable()
+    call AddMaxTable('I06B', 999) //corn
+    call AddMaxTable('I06C', 999) //wheat
+    call AddMaxTable('I06D', 999) //grape
+    call AddMaxTable('I06E', 999) //mushroom
+    call AddMaxTable(HighCorn, 999) //
+    call AddMaxTable(HighWheat, 999) //
+    call AddMaxTable(HighGrape, 999) //
+    call AddMaxTable(HighMushroom, 999) //
+    call AddMaxTable(SpecialCorn, 999) //
+    call AddMaxTable(SpecialWheat, 999) //
+    call AddMaxTable(SpecialGrape, 999) //
+    call AddMaxTable(SpecialMushroom, 999) //
+    
+    
+    call AddMaxTable('I067', 99) //wheat seed
+    call AddMaxTable('I068', 99) //corn seed
+    call AddMaxTable('I069', 99) //grape seed
+    call AddMaxTable('I06A', 99) //mushroom seed
+    
+    call AddMaxTable(HighCornSeed, 99) //wheat seed
+    call AddMaxTable(HighWheatSeed, 99) //corn seed
+    call AddMaxTable(HighGrapeSeed, 99) //grape seed
+    call AddMaxTable(HighMushroomSeed, 99) //mushroom seed
+    
+    call AddMaxTable(SpecialCornSeed, 99) //wheat seed
+    call AddMaxTable(SpecialWheatSeed, 99) //corn seed
+    call AddMaxTable(SpecialGrapeSeed, 99) //grape seed
+    call AddMaxTable(SpecialMushroomSeed, 99) //mushroom seed
+    
+    call AddMaxTable('I07I', 100) //Corn Bread
+    call AddMaxTable('I07J', 100) //
+    call AddMaxTable('I07K', 100) //
+    
+    call AddMaxTable('I07L', 100) //Grape Flake
+    call AddMaxTable('I07M', 100) //
+    call AddMaxTable('I07N', 100) //
+    
+    //Summon XX
+    call AddMaxTable('I070', 9) //
+    call AddMaxTable('I071', 9) //
+    call AddMaxTable('I073', 9) //
+    call AddMaxTable('I075', 9) //
+    
+    call AddMaxTable('I002', 5) //heal potion
+    call AddMaxTable('I005', 5) //healing salve
+    call AddMaxTable('I004', 2) //teleport scroll
+    call AddMaxTable('I020', 5) //medium healing salve
+    call AddMaxTable('I003', 5) //mana potion
+    call AddMaxTable('I001', 5) //small clatary potion
+    call AddMaxTable('I021', 5) //medium clatary potion
+    call AddMaxTable('I00G', 3) //antimagic potion
+    
+endfunction
+
+endlibrary

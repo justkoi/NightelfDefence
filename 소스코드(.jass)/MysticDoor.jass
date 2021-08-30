@@ -1,0 +1,163 @@
+library MysticDoor needs GameObjectManager, CircleArea
+
+globals
+    private location array m_locStartAt[13]
+    private location array m_locEndAt[13]
+    private boolean array m_Passed[13]
+    private constant real fRadius = 105.0
+    private constant real fReuseTime = 0.5
+endglobals
+
+struct MysticDoor extends GameObject
+
+public location locStartAt
+public location locEndAt
+public location locStartToEnd
+public location locEndToStart
+public unit uStartDoor
+public unit uEndDoor
+public CircleArea StartCircleArea
+public CircleArea EndCircleArea
+public real fDuration = 25.0
+public real fTimer = 0.0
+public real fReuseTimer = 0.0
+public group visiters 
+
+public static method create takes location locStartAt, location locEndAt, real fDuration returns thistype
+    local thistype this = thistype.allocate()
+    set this.locStartAt = locStartAt
+    set this.locEndAt = locEndAt
+    set this.locStartToEnd = PolarProjectionBJ(locEndAt,170,AngleBetweenPoints(locStartAt,locEndAt))
+    set this.locEndToStart = PolarProjectionBJ(locStartAt,170,AngleBetweenPoints(locEndAt,locStartAt))
+    set this.fDuration = fDuration
+    set this.fTimer = 0.0
+    call AddGameObject(this)
+    //location locOrigin, real fRadius, boolexpr filterFunc
+    set StartCircleArea = CircleArea.create(locStartAt, fRadius, HeroTargetType.HeroOnly)
+    call StartCircleArea.SetStructKey(this)
+    call StartCircleArea.SetOnUnitEnterM(MysticDoor_OnUnitStartEnter)
+    call StartCircleArea.SetOnUnitExitM(MysticDoor_OnUnitStartExit)
+    set EndCircleArea = CircleArea.create(locEndAt, fRadius, HeroTargetType.HeroOnly)
+    call EndCircleArea.SetOnUnitEnterM(MysticDoor_OnUnitEndEnter)
+    call EndCircleArea.SetOnUnitExitM(MysticDoor_OnUnitEndExit)
+    call EndCircleArea.SetStructKey(this)
+    set this.fReuseTimer = 0.0
+    set this.visiters = CreateGroup()
+    return this
+endmethod
+
+//시작 시
+public method Start takes nothing returns nothing
+    call CreateNUnitsAtLocFacingLocBJ(1, 'n02X', Player(PLAYER_NEUTRAL_PASSIVE), locStartAt, locEndAt)
+    set uStartDoor = bj_lastCreatedUnit
+    
+    call CreateNUnitsAtLocFacingLocBJ(1, 'n02X', Player(PLAYER_NEUTRAL_PASSIVE), locEndAt, locStartAt)
+    set uEndDoor = bj_lastCreatedUnit
+endmethod
+
+//매 업데이트 마다
+public method Update takes real dt returns nothing
+    set fTimer = fTimer + dt
+    if(fTimer >= fDuration) then
+        call Destroy()
+    endif
+    set fReuseTimer = fReuseTimer + dt
+    if(fReuseTimer >= fReuseTime) then
+        set fReuseTimer = 0.0
+        call GroupClear(visiters)
+    endif
+    call StartCircleArea.Update()
+    call EndCircleArea.Update()
+endmethod
+
+//호출 시 파괴됨
+public method Destroy takes nothing returns nothing
+    set isDestroied = true
+endmethod
+
+//파괴되면?
+public method OnDestroy takes nothing returns nothing
+    call StartCircleArea.destroy()
+    call EndCircleArea.destroy()
+    
+    call RemoveLocation(locStartAt)
+    call RemoveLocation(locEndAt)
+    call RemoveLocation(locStartToEnd)
+    call RemoveLocation(locEndToStart)
+    set locStartAt = null
+    set locEndAt = null
+    set locStartAt = null
+    set locEndAt = null
+    
+    call KillUnit(uStartDoor)
+    call KillUnit(uEndDoor)
+    call RemoveUnit(uStartDoor)
+    call RemoveUnit(uEndDoor)
+    set uStartDoor = null
+    set uEndDoor = null
+    
+endmethod
+
+
+endstruct
+
+public function OnUnitStartEnter takes integer structKey, unit data returns nothing
+    local MysticDoor door = structKey
+    if(IsUnitInGroup(data,door.visiters))then
+        debug call Log("OnUnitStartEnter Already Visit")
+        return
+    endif
+    call UnitMoveToLoc(data, door.locStartToEnd)
+    call GroupAddUnit(door.visiters,data)
+    call AddSpecialEffectTargetUnitBJ( "origin", data, "MASSTeleportTo.MDX" )
+    call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+    debug call Log("OnUnitStartEnter")
+endfunction
+
+public function OnUnitStartExit takes integer structKey, unit data returns nothing
+    debug call Log("OnUnitStartExit")
+    
+endfunction
+
+public function OnUnitEndEnter takes integer structKey, unit data returns nothing
+    local MysticDoor door = structKey
+     if(IsUnitInGroup(data,door.visiters))then
+        debug call Log("OnUnitEndEnter Already Visit")
+        return
+    endif
+    call GroupAddUnit(door.visiters,data)
+    call UnitMoveToLoc(data, door.locEndToStart)
+    call AddSpecialEffectTargetUnitBJ( "origin", data, "MASSTeleportTo.MDX" )
+    call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+    debug call Log("OnUnitrEndEnter")
+endfunction
+
+public function OnUnitEndExit takes integer structKey, unit data returns nothing
+    debug call Log("OnUnitEndExit")
+endfunction
+
+function SaveMysticDoor takes player pPlayer, location locStartAt, location locEndAt returns nothing
+    local integer nPlayer = GetPlayerId(pPlayer)
+    set m_locStartAt[nPlayer] = locStartAt
+    set m_locEndAt[nPlayer] = locEndAt
+    //debug call Log("[SaveMysticDoorIn] Location("+R2S(GetLocationX( m_locStartAt[nPlayer]))+","+R2S(GetLocationY( m_locStartAt[nPlayer]))+")")
+    set m_Passed[nPlayer] = true
+endfunction
+
+function isMysticDoorPassed takes player pPlayer returns boolean
+    return m_Passed[GetPlayerId(pPlayer)]
+endfunction
+ 
+function MysticDoorReject takes player pPlayer returns nothing
+    set m_Passed[GetPlayerId(pPlayer)] = false
+endfunction
+ 
+
+function CreateMysticDoor takes player pPlayer , real fDuration returns MysticDoor
+    local integer nPlayer = GetPlayerId(pPlayer)
+    local MysticDoor newMysticDoor = MysticDoor.create(m_locStartAt[nPlayer], m_locEndAt[nPlayer], fDuration)
+    //debug call Log("[CreateMysticDoor] Location("+R2S(GetLocationX( m_locStartAt[nPlayer]))+","+R2S(GetLocationY( m_locStartAt[nPlayer]))+")")
+    return newMysticDoor
+endfunction
+
+endlibrary

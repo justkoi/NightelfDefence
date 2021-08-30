@@ -1,0 +1,76 @@
+interface AISpell
+    public real fCooldownTimer
+    public real fCooldownTimeBase
+    public real fCooldownTime
+    public real fMpCost
+    public unit uOwner
+    ///스펠이 동작중인지 여부를 스펠링으로 명명
+    public boolean isSpelling
+    //사용조건에 여러가지가 있을수있음.
+    //일단 생성자에서 타이머 CanUseSkillCheck타이머를 돌려서 원안의 적대적 대상을 확인하던지 해야함
+    public method Play takes real dt returns nothing
+    public method hasCost takes nothing returns boolean
+    public method UseCost takes nothing returns nothing
+    public method isCooldown  takes nothing returns boolean
+    public method CanUseSpell takes nothing returns boolean
+    public method StartSpell takes nothing returns nothing
+    public method EndSpell takes nothing returns nothing
+    public method ResetCooldown takes nothing returns nothing
+    public method isExpired takes nothing returns boolean
+endinterface
+
+//무슨보스 XX스킬 extends AISpell
+/*
+struct PitlordWarStomp extends AISpell
+    public static method create takes real fCooldownTime, unit uOwner returns thistype
+        local thistype this = thistype.allocate()
+        set this.fCooldownTimer = 0
+        set this.fCooldownTime = fCooldownTime
+        set this.uOwner = uOwner
+        set this.isSpelling = false
+        return this
+    endmethod
+    
+    public method Update takes real dt returns nothing
+        if(isCooldown) then
+            set fCooldownTimer = fCooldownTimer + dt
+        endif
+        if(CanUseSpell()) then
+            call StartSpell()
+        endif
+    endmethod
+
+    public method isCooldown takes nothing returns boolean
+        return (fCooldownTimer < fCooldownTime)
+    endmethod
+    
+    public method CanUseSpell takes nothing returns boolean
+        return not isCooldown() and not isSpelling
+    endmethod
+    
+    
+    public method StartSpell takes nothing returns nothing
+         
+    endmethod
+    
+    public method EndSpell takes nothing returns nothing
+        call ResetCooldown()
+    endmethod
+    
+    public method ResetCooldown takes nothing returns nothing
+        set fCooldownTimer = fCooldownTimer - fCooldownTime
+    endmethod
+    
+    public method isExpired takes nothing returns boolean
+        if(isUnitDead(uOwner)) then
+            return true
+        endif
+        
+        return false
+    endmethod
+    
+    public method onDestroy takes nothing returns nothing
+        set uOwner = null
+    endmethod
+endstruct
+*/

@@ -1,0 +1,171 @@
+library CircleArea requires Extensions
+
+
+struct CircleArea
+
+public location locOrigin
+public real fRadius
+public Action_unit onUnitEnter
+public Action_unit onUnitExit
+public MethodAction_unit onUnitEnterM
+public MethodAction_unit onUnitExitM
+public UnitList unitList
+public HeroTargetType eHeroTargetType
+public integer structKey
+
+public static method create takes location locOrigin, real fRadius, HeroTargetType eHeroTargetType returns thistype
+    local thistype this = thistype.allocate()
+    set this.locOrigin = locOrigin
+    //debug call Log("[CircleArea] Location("+R2S(GetLocationX(locOrigin))+","+R2S(GetLocationY(locOrigin))+")")
+    set this.fRadius = fRadius
+    set unitList = unitList.create()
+    set this.eHeroTargetType = eHeroTargetType
+    return this
+endmethod
+
+static thistype filter
+public static  method isHeroUnit takes nothing returns boolean
+    local unit uTemp = GetFilterUnit()
+    local player pTemp = GetOwningPlayer(uTemp)
+    
+    
+    if(not IsPlayerInForce(pTemp, udg_GroupPlayer)) then
+       // debug call Log("Player"+I2S(GetPlayerId(pTemp))+" Is Not PlayerInForce ")
+        set pTemp = null
+        set uTemp = null
+        return false
+    endif
+    
+    if(filter.eHeroTargetType == HeroTargetType.HeroOnly) then
+        if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+           // debug call Log(GetUnitName(uTemp) + "is Not UNIT_TYPE_HERO")
+            set pTemp = null
+            set uTemp = null
+
+            return false
+        endif
+    elseif(filter.eHeroTargetType == HeroTargetType.NonHeroOnly) then
+        if (IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+           // debug call Log(GetUnitName(uTemp) + "is Not NONHERO")
+            set pTemp = null
+            set uTemp = null
+            return false
+        endif
+    endif
+    
+    if(isUnitDead(uTemp)) then
+       // debug call Log(GetUnitName(uTemp) + "isUnitDead")
+        set pTemp = null
+        set uTemp = null
+        return false
+    endif
+    
+    //debug call Log("[CheckisHeroUnit] "+GetUnitName(uTemp) + "is OK")
+    set pTemp = null
+    set uTemp = null
+    return true
+endmethod
+public method Update takes nothing returns nothing
+    local UnitList searchList = NULL
+    local unitNode searchedNode = NULL
+    local unit currSearchedUnit = null
+    
+    local unitNode unitListNode = unitList.head
+    local unit currUnitListUnit = null
+    
+    set filter = this
+    set searchList = CreateUnitListInRangeByLocation(locOrigin, fRadius, Filter(function CircleArea.isHeroUnit))
+    //debug call Log("searchList.size() = "+I2S(searchList.Size()))
+    set searchedNode = searchList.head
+    if(searchList != NULL and not searchList.isEmpty()) then
+        loop
+            exitwhen not(searchedNode != NULL)
+                set currSearchedUnit = searchedNode.data
+                if(not isUnitInList(currSearchedUnit))then
+                    call OnUnitEnter(currSearchedUnit)
+                endif
+                //안빼진 경우에만 다음꺼 빼지면 이미 한칸 당겨진경우임
+                set searchedNode = searchedNode.next
+        endloop
+    endif
+    
+    
+    set unitListNode = unitList.head
+    loop
+        exitwhen not(unitListNode != NULL)
+            set currUnitListUnit = unitListNode.data
+            //현재 기존에 있었던 애들로 빼봤는데 안빼지면 기존에 있었지만 현재 빠졌다는것
+            if(searchList.Remove(currUnitListUnit) == null) then
+                call OnUnitExit(currUnitListUnit)
+            endif
+            set unitListNode = unitListNode.next
+    endloop
+    
+    call searchList.destroy()
+
+
+endmethod
+
+public method onDestroy takes nothing returns nothing
+    call RemoveLocation(locOrigin)
+    set locOrigin = null
+endmethod
+
+public method SetStructKey takes integer structKey returns nothing
+    set this.structKey = structKey
+endmethod
+
+
+public method SetOnUnitEnter takes Action_unit onUnitEnter returns nothing
+    set this.onUnitEnter = onUnitEnter
+endmethod
+
+public method SetOnUnitExit takes Action_unit onUnitExit returns nothing
+    set this.onUnitExit = onUnitExit
+endmethod
+
+public method SetOnUnitEnterM takes MethodAction_unit onUnitEnterM returns nothing
+    set this.onUnitEnterM = onUnitEnterM
+endmethod
+
+public method SetOnUnitExitM takes MethodAction_unit onUnitExitM returns nothing
+    set this.onUnitExitM = onUnitExitM
+endmethod
+
+private method OnUnitEnter takes unit uTarget returns nothing
+    if(onUnitEnter != null) then
+        call onUnitEnter.execute(uTarget)
+    endif 
+    if(onUnitEnterM != null) then
+        call onUnitEnterM.execute(structKey, uTarget)
+    endif 
+    call unitList.Add(uTarget)
+endmethod
+
+private method OnUnitExit takes unit uTarget returns nothing
+    if(onUnitExit != null) then
+        call onUnitExit.execute(uTarget)
+    endif
+    if(onUnitExitM != null) then
+        call onUnitExitM.execute(structKey, uTarget)
+    endif
+   call unitList.Remove(uTarget)
+endmethod
+
+private method isUnitInList takes unit targetUnit returns boolean
+    local unitNode unitListNode = unitList.head
+    local unit currUnitListUnit = null
+    loop
+        exitwhen not(unitListNode != NULL)
+            set currUnitListUnit = unitListNode.data
+            if(currUnitListUnit == targetUnit) then
+                return true
+            endif
+            set unitListNode = unitListNode.next
+    endloop
+    return false
+endmethod
+
+endstruct
+
+endlibrary

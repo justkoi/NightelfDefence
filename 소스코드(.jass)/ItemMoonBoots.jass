@@ -1,0 +1,38 @@
+function Trig_ItemMoonBoots_Func001C takes nothing returns boolean
+    if ( not ( GetSpellAbilityId() == 'A0D8' ) ) then
+        return false
+    endif
+    return true
+endfunction
+
+function Trig_ItemMoonBoots_Conditions takes nothing returns boolean
+    if ( not Trig_ItemMoonBoots_Func001C() ) then
+        return false
+    endif
+    return true
+endfunction
+
+function Trig_ItemMoonBoots_Actions takes nothing returns nothing
+    local unit uTriggerUnit = GetTriggerUnit()
+    local location locTemp = GetSpellTargetLoc()
+    
+    call PlayMovementToLoc(uTriggerUnit, locTemp, false, 460, -100, 0.3, true, true,false)
+    call PlayEffectAtUnit(EffectId.MoonBoots, uTriggerUnit, 1.0,0.05).DontFollow()
+    call PlayEffectAtUnit(EffectId.MoonBoots, uTriggerUnit, 1.0,0.10).DontFollow()
+    call PlayEffectAtUnit(EffectId.MoonBoots, uTriggerUnit, 1.0,0.15).DontFollow()
+    call PlayEffectAtUnit(EffectId.MoonBoots, uTriggerUnit, 1.0,0.20).DontFollow()
+    call PlayEffectAtUnit(EffectId.MoonBoots, uTriggerUnit, 1.0,0.25).DontFollow()
+    
+    set uTriggerUnit = null
+    call RemoveLocation(locTemp)
+    set locTemp = null
+endfunction
+
+//===========================================================================
+function InitTrig_ItemMoonBoots takes nothing returns nothing
+    set gg_trg_ItemMoonBoots = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_ItemMoonBoots, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddCondition( gg_trg_ItemMoonBoots, Condition( function Trig_ItemMoonBoots_Conditions ) )
+    call TriggerAddAction( gg_trg_ItemMoonBoots, function Trig_ItemMoonBoots_Actions )
+endfunction
+

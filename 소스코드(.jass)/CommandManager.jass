@@ -1,0 +1,320 @@
+library CommandManager requires TimerUtils
+
+globals
+    private timer undeadWaveTimer = null
+    private timer undeadFlyingTimer = null
+    private timer nightelfWaveTimer = null
+    private timer timerUndeadAttack = null
+    private timer timerNightElfMainWave = null
+    private timer timerNightElfLongWave = null
+    private timer timerRemoveGP_NightElf = null
+    private timer timerRemoveGP_Undead = null
+    private UnitList undeadWaveList
+    private UnitList undeadFlyingList
+    private UnitList nightelfWaveList
+   public constant real AllNightelfWaveAttackPriod = 61.17
+   public constant real AllUndeadWaveAttackPriod = 31.17
+   public constant real AllUndeadFlyingAttackPriod = 61.17
+endglobals
+
+private function StandardNightElfCommand takes unit uUnit returns nothing
+    if(GetUnitAbilityLevel(uUnit,'A0DE') >= 1) then
+        call IssuePointOrderLoc(uUnit,"attack",udg_locNightElfPoint1)
+        //Point1
+    elseif (GetUnitAbilityLevel(uUnit,'A0DF') >= 1) then
+        //UndeadPoint1
+        call IssuePointOrderLoc(uUnit,"attack",udg_locUndeadRegenPoint1)
+    else
+        //UndeadRegenMain
+        call IssuePointOrderLoc(uUnit,"attack",udg_locUndeadRegenTown)
+    endif
+endfunction
+
+private function isUndeadWaveGroup takes nothing returns boolean
+    local unit uTemp = GetFilterUnit()
+    local boolean result = true
+    if(IsUnitType(uTemp, UNIT_TYPE_HERO) == true) then
+        set uTemp = null
+        return false
+    endif
+    
+    if(IsUnitType(uTemp, UNIT_TYPE_STRUCTURE) == true) then
+        set uTemp = null
+        return false
+    endif
+    
+    if(IsUnitType(uTemp, UNIT_TYPE_FLYING) == true) then
+        set uTemp = null
+        return false
+    endif
+    call undeadWaveList.Add(uTemp)
+    set uTemp = null
+    return true
+endfunction
+
+private function isNightelfWaveGroup takes nothing returns boolean
+    local unit uTemp = GetFilterUnit()
+    local boolean result = true
+    if(IsUnitType(uTemp, UNIT_TYPE_HERO) == true) then
+        set uTemp = null
+        return false
+    endif
+    
+    if(IsUnitType(uTemp, UNIT_TYPE_STRUCTURE) == true) then
+        set uTemp = null
+        return false
+    endif
+    
+    if(IsUnitType(uTemp, UNIT_TYPE_FLYING) == true) then
+        set uTemp = null
+        return false
+    endif
+    call nightelfWaveList.Add(uTemp)
+    set uTemp = null
+    return true
+endfunction
+
+private function isUndeadFlyingGroup takes nothing returns boolean
+    local unit uTemp = GetFilterUnit()
+    local boolean result = true
+    //로커스트 제외
+    if(GetUnitTypeId(uTemp) == 'uloc') then
+        set uTemp = null
+        return false
+    endif
+    //나가 로얄 등장전까지 비공정 제외
+    if(udg_nUndeadEvent <= 8 and GetUnitTypeId(uTemp) == 'n004') then
+        set uTemp = null
+        return false
+    endif
+    if(IsUnitType(uTemp, UNIT_TYPE_HERO) == true) then
+        set uTemp = null
+        return false
+    endif
+    
+    if(IsUnitType(uTemp, UNIT_TYPE_STRUCTURE) == true) then
+        set uTemp = null
+        return false
+    endif
+    
+    if(IsUnitType(uTemp, UNIT_TYPE_FLYING) == false) then
+        set uTemp = null
+        return false
+    endif
+    call undeadFlyingList.Add(uTemp)
+    set uTemp = null
+    return true
+endfunction
+private function NightelfWaveCallback takes nothing returns nothing
+    local group tempGroup = CreateGroup()
+    call nightelfWaveList.Clear()
+    call GroupEnumUnitsOfPlayer(tempGroup, playerNightElf, Condition(function isNightelfWaveGroup))
+    //Clear
+    call DestroyGroup(tempGroup)
+    set tempGroup = null
+    call DeleteTimer(nightelfWaveTimer)
+    set nightelfWaveTimer = null
+endfunction
+
+private function UndeadWaveCallBack takes nothing returns nothing
+    local group tempGroup = CreateGroup()
+    call undeadWaveList.Clear()
+    call GroupEnumUnitsOfPlayer(tempGroup, playerUndead, Condition(function isUndeadWaveGroup))
+    
+    //Clear
+    call DestroyGroup(tempGroup)
+    set tempGroup = null
+    call DeleteTimer(undeadWaveTimer)
+    set undeadWaveTimer = null
+endfunction
+
+private function UndeadFlyingCallBack takes nothing returns nothing
+    local group tempGroup = CreateGroup()
+    call undeadFlyingList.Clear()
+    call GroupEnumUnitsOfPlayer(tempGroup, playerUndead, Condition(function isUndeadFlyingGroup))
+    
+    //Clear
+    call DestroyGroup(tempGroup)
+    set tempGroup = null
+    call DeleteTimer(undeadFlyingTimer)
+    set undeadFlyingTimer = null
+endfunction
+
+private function OnWaveCommandCallback takes nothing returns nothing
+    local unit uTemp = null
+    //언데드 지상유닛
+    if undeadWaveList.Count <= 0 then
+        if undeadWaveTimer == null then
+            set undeadWaveTimer = CreateTimer()
+            call TimerStart(undeadWaveTimer, AllUndeadWaveAttackPriod, false, function UndeadWaveCallBack)
+        endif
+    else
+        //큐애서 맨 앞에 유닛 빼서 공격명령내립니다.
+        set uTemp = undeadWaveList.RemoveFirst()
+        //야만인?
+        if(UnitHasBuffBJ(uTemp, 'A0J2')) then
+            call IssuePointOrderLoc(uTemp, "attack", GetRectCenter(gg_rct_BarbarianPoint1))
+        else 
+            call IssuePointOrderLoc(uTemp, "attack", udg_locNightElfTown)
+        endif
+        debug call Log("[OnUndeadWaveAttack] 명령함 "+GetUnitName(uTemp)+" 남은수:"+I2S(undeadWaveList.Count))
+    endif
+    set uTemp = null
+    //언데드 공중유닛
+    if undeadFlyingList.Count <= 0 then
+        if undeadFlyingTimer == null then
+            set undeadFlyingTimer = CreateTimer()
+            call TimerStart(undeadFlyingTimer, AllUndeadFlyingAttackPriod, false, function UndeadFlyingCallBack)
+        endif
+    else
+        //큐애서 맨 앞에 유닛 빼서 공격명령내립니다.
+        set uTemp = undeadFlyingList.RemoveFirst()
+        if(GetUnitTypeId(uTemp) == 'n004') then //비공정은 이동명령
+            call IssuePointOrderLoc(uTemp, "move", udg_locNightElfPoint1)
+        else 
+            if( UnitHasBuffBJ(uTemp, 'B02T')) then
+                call IssuePointOrderLoc(uTemp, "attack", udg_locNightElfTown)
+            else
+                call IssuePointOrderLoc(uTemp, "attack", udg_locNightElfPoint1)
+            endif
+        endif
+        //debug call Log("[OnUndeadFlyingAttack] 명령함 "+GetUnitName(uTemp)+" 남은수:"+I2S(undeadFlyingList.Count))
+    endif
+    //
+    set uTemp = null
+    //나엘 지상유닛
+    if nightelfWaveList.Count <= 0 then
+        if nightelfWaveTimer == null then
+            set nightelfWaveTimer = CreateTimer()
+            call TimerStart(nightelfWaveTimer, AllNightelfWaveAttackPriod, false, function NightelfWaveCallback)
+        endif
+    else
+        //큐애서 맨 앞에 유닛 빼서 공격명령내립니다.
+        set uTemp = nightelfWaveList.RemoveFirst()
+        call IssuePointOrderLoc(uTemp, "attack", udg_locUndeadRegenTown)
+        //debug call Log("[OnNightelfWaveAttack] 명령함 "+GetUnitName(uTemp)+" 남은수:"+I2S(nightelfWaveList.Count))
+    endif
+    set uTemp = null
+endfunction
+
+private function OnNightElfMainWave takes nothing returns nothing
+    local group groupTemp = CreateGroup()
+    local location locTemp
+    
+    if(udg_uYsera != null and isUnitAlive(udg_uYsera)) then
+        call StandardNightElfCommand(udg_uYsera)
+    endif
+    //지상유닛1
+    call GroupEnumUnitsInRect( groupTemp, gg_rct_NightElfSupportingForces, Condition(function isNightElfGroundUnit) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenTown )
+    call GroupClear( groupTemp )
+    //지상지원
+    //call GroupEnumUnitsInRect( groupTemp, gg_rct_NightElfSupportingForces, Condition(function isNightElfGroundUnit) )
+    //call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenTown )
+    //call GroupClear( groupTemp )
+    //지상유닛2
+    //지상유닛1
+    call GroupEnumUnitsInRect( groupTemp, gg_rct_NightElfRegenMain1, Condition(function isNightElfGroundUnit) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenTown )
+    call GroupClear( groupTemp )
+    //지상유닛2
+    call GroupEnumUnitsInRect( groupTemp, gg_rct_NightElfRegenMain2, Condition(function isNightElfGroundUnit) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenTown )
+    call GroupClear( groupTemp )
+    //지상유닛3
+    call GroupEnumUnitsInRect( groupTemp, gg_rct_NightElfTown, Condition(function isNightElfGroundUnit) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenTown )
+    call GroupClear( groupTemp )
+    //공중유닛1
+    call GroupEnumUnitsInRect( groupTemp, gg_rct_NightElfRegenAir, Condition(function isNightElfFlyingUnit) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenPoint1 )
+    call GroupClear( groupTemp )
+    //공중유닛2
+    call GroupEnumUnitsInRect( groupTemp, gg_rct_NightElfTown, Condition(function isNightElfFlyingUnit) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locNightElfPoint1 )
+    call GroupClear( groupTemp )
+    //공중유닛1
+    call GroupEnumUnitsInRect( groupTemp, GetPlayableMapRect(), Condition(function isNightElfGolem) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenTown )
+    call GroupClear( groupTemp )
+    
+    if(udg_bTirandePoint == 0) then
+        call GroupEnumUnitsInRect( groupTemp, GetPlayableMapRect(), Condition(function isNightElfTirande) )
+        call GroupPointOrderLocBJ( groupTemp, "move", udg_locNightElfTown )
+        call GroupClear( groupTemp )
+    endif
+    
+    
+    
+    //Clear
+    call DestroyGroup(groupTemp)
+    set groupTemp = null
+endfunction
+
+
+private function OnNightElfLongWave takes nothing returns nothing
+    local group groupTemp = CreateGroup()
+    //지상유닛
+    /*
+    call GroupEnumUnitsInRect( groupTemp, GetPlayableMapRect(), Condition(function isNightElfGroundUnit) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenTown )
+    call GroupClear( groupTemp )
+    */
+     //지상유닛
+     
+    call GroupEnumUnitsInRect( groupTemp, GetPlayableMapRect(), Condition(function isNightElfFlyingUnit) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locUndeadRegenPoint1 )
+    call GroupClear( groupTemp )
+    
+    //블루드래곤
+    call GroupEnumUnitsInRect( groupTemp, GetPlayableMapRect(), Condition(function isNightElfBlueDragon) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locNightElfPoint1 )
+    call GroupClear( groupTemp )
+    
+    //그린드래곤
+    call GroupEnumUnitsInRect( groupTemp, GetPlayableMapRect(), Condition(function isNightElfGreenDragon) )
+    call GroupPointOrderLocBJ( groupTemp, "attack", udg_locNightElfPoint1 )
+    call GroupClear( groupTemp )
+    
+    //Clear
+    call DestroyGroup(groupTemp)
+    set groupTemp = null
+endfunction
+
+private function RemoveGuardPositionNightElf takes nothing returns nothing
+    call RemoveAllGuardPositions(playerNightElf)
+endfunction
+private function RemoveGuardPositionUndead takes nothing returns nothing
+    call RemoveAllGuardPositions(playerUndead)
+endfunction
+
+private function Init takes nothing returns nothing
+    //debug call Log("CommandManager")
+    set nightelfWaveList = UnitList.create()
+    set undeadWaveList = UnitList.create()
+    set undeadFlyingList = UnitList.create()
+    set nightelfWaveTimer = CreateTimer()
+    set undeadWaveTimer = CreateTimer()
+    set undeadFlyingTimer = CreateTimer()
+    set timerUndeadAttack = CreateTimer()
+    set timerNightElfMainWave = CreateTimer()
+    set timerNightElfLongWave = CreateTimer()
+    set timerRemoveGP_NightElf = CreateTimer()
+    set timerRemoveGP_Undead = CreateTimer()
+    call TimerStart(timerUndeadAttack, 0.04, true, function OnWaveCommandCallback)
+    call TimerStart(nightelfWaveTimer, AllNightelfWaveAttackPriod, false, function NightelfWaveCallback)
+    call TimerStart(undeadWaveTimer, AllUndeadWaveAttackPriod, false, function UndeadWaveCallBack)
+    call TimerStart(undeadFlyingTimer, AllUndeadFlyingAttackPriod, false, function UndeadFlyingCallBack)
+    call TimerStart(timerNightElfMainWave, 5.11, true, function OnNightElfMainWave)
+    call TimerStart(timerNightElfLongWave, 121.17, true, function OnNightElfLongWave)
+    call TimerStart(timerRemoveGP_NightElf , 10.74, true, function RemoveGuardPositionNightElf)
+    call TimerStart(timerRemoveGP_Undead, 10.17, true, function RemoveGuardPositionUndead)
+endfunction
+
+function InitTrig_CommandManager takes nothing returns nothing
+    local trigger t = CreateTrigger(  )
+    call TriggerRegisterTimerEventSingle( t, 1.01 )
+    call TriggerAddAction( t, function Init )
+endfunction
+
+endlibrary

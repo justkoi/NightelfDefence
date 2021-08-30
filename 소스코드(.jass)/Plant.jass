@@ -1,0 +1,293 @@
+library Plant needs GameObjectManager, EffectManager
+
+globals
+    private constant integer nRipening = 'A0F9'
+    
+    constant integer uCorn = 'e01G'
+    constant integer uWheat = 'e01F'
+    constant integer uGrape = 'e01H'
+    constant integer uMushroom = 'e01I'
+    
+    constant integer uHighCorn = 'e01O'
+    constant integer uHighWheat = 'e01K'
+    constant integer uHighGrape = 'e01Q'
+    constant integer uHighMushroom = 'e01M'
+    
+    constant integer uSpecialCorn = 'e01P'
+    constant integer uSpecialWheat = 'e01L'
+    constant integer uSpecialGrape = 'e01R'
+    constant integer uSpecialMushroom = 'e01N'
+
+    constant integer Corn = 'I06B'
+    constant integer Wheat = 'I06C'
+    constant integer Grape = 'I06D'
+    constant integer Mushroom = 'I06E'
+    
+    constant integer HighCorn = 'I06H'
+    constant integer HighWheat = 'I06F'
+    constant integer HighGrape = 'I06J'
+    constant integer HighMushroom = 'I06L'
+    
+    constant integer SpecialCorn = 'I06I'
+    constant integer SpecialWheat = 'I06G'
+    constant integer SpecialGrape = 'I06K'
+    constant integer SpecialMushroom = 'I06M'
+    
+    constant integer CornSeed = 'I068'
+    constant integer WheatSeed = 'I067'
+    constant integer GrapeSeed = 'I069'
+    constant integer MushroomSeed = 'I06A'
+    
+    constant integer HighCornSeed = 'I06P'
+    constant integer HighWheatSeed = 'I06N'
+    constant integer HighGrapeSeed = 'I06R'
+    constant integer HighMushroomSeed = 'I06T'
+    
+    constant integer SpecialCornSeed = 'I06Q'
+    constant integer SpecialWheatSeed = 'I06O'
+    constant integer SpecialGrapeSeed = 'I06S'
+    constant integer SpecialMushroomSeed = 'I06U'
+endglobals
+
+function CreatePlant takes unit uPlant, real fMinScale, real fMaxScale, real fMaxMpCost, real fGrowingTime, real fBurningDamage returns Plant
+    return Plant.create(uPlant,fMinScale,fMaxScale,fMaxMpCost,fGrowingTime,fBurningDamage)
+endfunction
+
+struct Plant extends GameObject
+
+    static constant real fUnitScaleTime = 3.0
+    static constant real fConsumeTime = 3.0
+
+    public unit uPlant = null
+    
+    public boolean isDestroied = false
+    public real fMpCost = 0
+    public real fConsumeTimer = 0
+    public real fGrowingTimer = 0
+    public real fGrowingTime = 0
+    public real fUnitScaleTimer = 0
+    public real fBurningDamage = 0
+    public real fMinScale = 0
+    public real fMaxScale = 0
+    
+    public static method create takes unit uPlant, real fMinScale, real fMaxScale, real fMaxMpCost, real fGrowingTime, real fBurningDamage returns thistype
+        local thistype this = thistype.allocate()
+        set this.uPlant = uPlant
+        set this.fMinScale = fMinScale
+        set this.fMaxScale = fMaxScale
+        set this.fMpCost = (fMaxMpCost/fGrowingTime) * fConsumeTime
+        set this.fConsumeTimer = 0
+        set this.fGrowingTimer = 0
+        set this.fGrowingTime = fGrowingTime
+        set this.fBurningDamage = fBurningDamage
+        call AddGameObject(this)
+        return this
+    endmethod
+
+    public method Consume takes nothing returns nothing
+        call AddUnitMp(uPlant, -fMpCost)
+    endmethod
+    
+    public method GrowingRate takes nothing returns real
+        return MinReal(1.0, fGrowingTimer / fGrowingTime)
+    endmethod
+
+    public method isThirsting takes nothing returns boolean
+        return GetUnitMp(uPlant) <= 0.001
+    endmethod
+    
+    public method Burning takes nothing returns nothing
+        call DealUnit(uPlant, fBurningDamage)
+        call PlayEffectAtUnit(EffectId.Burning,uPlant,1.0,0.0)
+    endmethod
+    
+    public method Harvest takes nothing returns nothing
+        local integer rand = 0
+        local integer rand2 = 0
+        local integer rand3 = 0
+        local integer additional = 0
+        local integer nextLvSeedPercent = 0
+        if(GetUnitAbilityLevel(g_uFarmer,'A0FM')>= 1)then
+            set additional = 7
+        endif
+        set nextLvSeedPercent = (GetUnitAbilityLevel(g_uFarmer,'A0FM')*2) + additional//
+        //call FLog("Harvest nextLvSeedPercent : "+I2S(nextLvSeedPercent))
+        if(GrowingRate() < 0.99) then
+            //call FLog("Harvest return")
+            return
+        endif
+        
+        set rand = GetRandomInt(0,9) //9
+        set rand3 = GetRandomInt(0,99) //99
+        //call FLog("rand = "+I2S(rand))
+        //some reward
+        if( GetUnitTypeId(uPlant) == uCorn ) then//Corn
+            if(rand >= 0 and rand <= 3)then
+                call UnitAddChargedItemById(g_uFarmer,CornSeed,1) //30% Seed 1
+            elseif(rand >= 4 and rand <= 7)then
+                call UnitAddChargedItemById(g_uFarmer,CornSeed,2) //40% Seed 2
+            endif
+            set rand2 = GetRandomInt(20,30)
+            call UnitAddChargedItemById(g_uFarmer,Corn,rand2)
+            if(rand3 <= nextLvSeedPercent) then
+                call UnitAddChargedItemById(g_uFarmer,HighCornSeed,1)
+            endif
+        elseif( GetUnitTypeId(uPlant) == uWheat ) then//Wheat
+            if(rand >= 0 and rand <= 3)then
+                call UnitAddChargedItemById(g_uFarmer,WheatSeed,1) //30% Seed 1
+            elseif(rand >= 4 and rand <= 7)then
+                call UnitAddChargedItemById(g_uFarmer,WheatSeed,2) //40% Seed 2
+            endif
+            set rand2 = GetRandomInt(30,45)
+            call UnitAddChargedItemById(g_uFarmer,Wheat,rand2)
+            if(rand3 <= nextLvSeedPercent) then
+                call UnitAddChargedItemById(g_uFarmer,HighWheatSeed,1)
+            endif
+        elseif( GetUnitTypeId(uPlant) == uGrape ) then//Grape
+            if(rand >= 0 and rand <= 3)then
+                call UnitAddChargedItemById(g_uFarmer,GrapeSeed,1) //40% Seed 1
+            elseif(rand >= 4 and rand <= 7)then
+                call UnitAddChargedItemById(g_uFarmer,GrapeSeed,2) //40% Seed 2
+            endif
+            set rand2 = GetRandomInt(26,39)
+            call UnitAddChargedItemById(g_uFarmer,Grape,rand2)
+            if(rand3 <= nextLvSeedPercent) then
+                call UnitAddChargedItemById(g_uFarmer,HighGrapeSeed,1)
+            endif
+        elseif( GetUnitTypeId(uPlant) == uMushroom ) then//Mushroom
+            if(rand >= 0 and rand <= 3)then
+                call UnitAddChargedItemById(g_uFarmer,MushroomSeed,1) //30% Seed 1
+            elseif(rand >= 4 and rand <= 7)then
+                call UnitAddChargedItemById(g_uFarmer,MushroomSeed,2) //40% Seed 2
+            endif
+            set rand2 = GetRandomInt(35,51)
+            call UnitAddChargedItemById(g_uFarmer,Mushroom,rand2)
+             if(rand3 <= nextLvSeedPercent) then
+                call UnitAddChargedItemById(g_uFarmer,HighMushroomSeed,1)
+            endif
+        elseif( GetUnitTypeId(uPlant) == uHighCorn ) then//Corn 2
+            if(rand >= 0 and rand <= 6)then
+                call UnitAddChargedItemById(g_uFarmer,HighCornSeed,1) //60% Seed 1
+            endif
+            set rand2 = GetRandomInt(13,20)
+            call UnitAddChargedItemById(g_uFarmer,HighCorn,rand2)
+            if(rand3 <= nextLvSeedPercent) then
+                call UnitAddChargedItemById(g_uFarmer,SpecialCornSeed,1)
+            endif
+        elseif( GetUnitTypeId(uPlant) == uHighWheat ) then//Wheat 2
+            if(rand >= 0 and rand <= 6)then
+                call UnitAddChargedItemById(g_uFarmer,HighWheatSeed,1) 
+            endif
+            set rand2 = GetRandomInt(20,30)
+            call UnitAddChargedItemById(g_uFarmer,HighWheat,rand2)
+            if(rand3 <= nextLvSeedPercent) then
+                call UnitAddChargedItemById(g_uFarmer,SpecialWheatSeed,1)
+            endif
+        elseif( GetUnitTypeId(uPlant) == uHighGrape ) then//Grape 2
+            if(rand >= 0 and rand <= 6)then
+                call UnitAddChargedItemById(g_uFarmer,HighGrapeSeed,1) 
+            endif
+            set rand2 = GetRandomInt(17,26)
+            call UnitAddChargedItemById(g_uFarmer,HighGrape,rand2)
+            if(rand3 <= nextLvSeedPercent) then
+                call UnitAddChargedItemById(g_uFarmer,SpecialGrapeSeed,1)
+            endif
+        elseif( GetUnitTypeId(uPlant) == uHighMushroom ) then//Mushroom 2
+            if(rand >= 0 and rand <= 6)then
+                call UnitAddChargedItemById(g_uFarmer,HighMushroomSeed,1) 
+            endif
+            set rand2 = GetRandomInt(23,34)
+            call UnitAddChargedItemById(g_uFarmer,HighMushroom,rand2)
+            if(rand3 <= nextLvSeedPercent) then
+                call UnitAddChargedItemById(g_uFarmer,SpecialMushroomSeed,1)
+            endif
+        elseif( GetUnitTypeId(uPlant) == uSpecialCorn ) then//Corn 3
+            if(rand >= 0 and rand <= 2)then
+                call UnitAddChargedItemById(g_uFarmer,SpecialCornSeed,1) //30% Seed 1
+            endif
+            set rand2 = GetRandomInt(10,15)
+            call UnitAddChargedItemById(g_uFarmer,SpecialCorn,rand2)
+        elseif( GetUnitTypeId(uPlant) == uSpecialWheat ) then//Wheat 3
+            if(rand >= 0 and rand <= 2)then
+                call UnitAddChargedItemById(g_uFarmer,SpecialWheatSeed,1) //30% Seed 1
+            endif
+            set rand2 = GetRandomInt(15,22)
+            call UnitAddChargedItemById(g_uFarmer,SpecialWheat,rand2)
+        elseif( GetUnitTypeId(uPlant) == uSpecialGrape ) then//Grape 3
+            if(rand >= 0 and rand <= 2)then
+                call UnitAddChargedItemById(g_uFarmer,SpecialGrapeSeed,1) //30% Seed 1
+            endif
+            set rand2 = GetRandomInt(13,20)
+            call UnitAddChargedItemById(g_uFarmer,SpecialGrape,rand2)
+        elseif( GetUnitTypeId(uPlant) == uSpecialMushroom ) then//Mushroom 3
+            if(rand >= 0 and rand <= 2)then
+                call UnitAddChargedItemById(g_uFarmer,SpecialMushroomSeed,1) //30% Seed 1
+            endif
+            set rand2 = GetRandomInt(17,25)
+            call UnitAddChargedItemById(g_uFarmer,SpecialMushroom,rand2)
+        endif
+        //then effect
+        call PlayEffectAtLocation(EffectId.Harvest,GetUnitLoc(uPlant),3.0,0.0)
+        call RemoveSavedInteger(plantDic,GetHandleId(uPlant),0)
+        call Destroy()
+    endmethod
+    
+    //시작 시
+    public method Start takes nothing returns nothing
+        call SetUnitScale(uPlant, MaxReal(fMinScale,GrowingRate() * fMaxScale),0,0)
+    endmethod
+    
+    //매 업데이트 마다
+    public method Update takes real dt returns nothing
+        if(uPlant == null) then
+            call Destroy()
+        elseif(isUnitDead(uPlant))then
+            call Destroy()
+        endif
+        
+        set fConsumeTimer = fConsumeTimer + dt
+        if(fConsumeTimer >= fConsumeTime) then
+            set fConsumeTimer = fConsumeTimer - fConsumeTime
+            call Consume()
+            if(isThirsting()) then
+                call Burning()
+            endif
+        endif
+        
+        
+        set fGrowingTimer = fGrowingTimer + dt
+        //call FLog("GrowingRate = " + R2S(GrowingRate()))
+        
+        set fUnitScaleTimer = fUnitScaleTimer + dt
+        
+        if(fUnitScaleTimer >= fUnitScaleTime) then
+            set fUnitScaleTimer = fUnitScaleTimer - fUnitScaleTime
+            call SetUnitScale(uPlant, MaxReal(fMinScale, GrowingRate() * fMaxScale),0,0)
+            if(GrowingRate() >= 0.99 and not UnitHasBuffBJ(uPlant, nRipening)) then
+                call UnitAddAbility(uPlant,nRipening)
+                call PlayEffectAtUnit(EffectId.Ripe,uPlant,600.0,0.0)
+            endif
+        endif
+    endmethod
+    
+    //호출 시 파괴됨
+    public method Destroy takes nothing returns nothing
+        set isDestroied = true
+    endmethod
+    
+    //파괴되면?
+    public method OnDestroy takes nothing returns nothing
+        if(uPlant != null) then
+            call KillUnit(uPlant)
+        endif
+        set uPlant = null
+    endmethod
+
+endstruct
+
+
+//===========================================================================
+private function Init takes nothing returns nothing
+
+endfunction
+endlibrary

@@ -1,0 +1,502 @@
+library UnitSelectManager initializer Start requires Extensions, Globals, Plant
+
+globals
+   private IntegerList heroStockList
+   private IntegerList allRandomNumberList
+   private IntegerList tankerRandomNumberList
+   private IntegerList dealerRandomNumberList
+   private IntegerList healerRandomNumberList
+   private boolean array isHeroSetuped[D_MAX_PLAYER]
+   private boolean array isHeroRandomPicked[D_MAX_PLAYER]
+   public integer nHealerPlayerCount = 0
+   public integer nDealerPlayerCount = 0
+   public integer nTankerPlayerCount = 0
+   
+   private constant integer nAllRandomBonus = 1000
+   private constant integer nTankerRandomBonus = 1000
+   private constant integer nHealerRandomBonus = 1000
+   private constant integer nDealerRandomBonus = 500
+endglobals
+
+///혹은 Hero class에 정보 기입후 HeroList 만들어서 넣자
+private function SetupHeroStockList takes nothing returns nothing
+    set heroStockList = IntegerList.create()
+    ///TODO : LoadDB or..XML.. or...
+    call heroStockList.Add(1)//DruidOfClaw = 0
+    call heroStockList.Add(1)//DemonHunter = 1
+    call heroStockList.Add(1)//Warden = 2
+    call heroStockList.Add(1)//Arkmage = 3
+    call heroStockList.Add(1)//Gardener = 4
+    call heroStockList.Add(1)//Warlock = 5
+    call heroStockList.Add(1)//MountinKing = 6
+    call heroStockList.Add(1)//BloodMage = 7
+    call heroStockList.Add(1)//BladeMaster = 8
+    call heroStockList.Add(1)//DarkWolf = 9
+    call heroStockList.Add(1)//LightingMan = 10
+    call heroStockList.Add(1)//Tauren = 11
+    call heroStockList.Add(1)//ForestWisp = 12
+    call heroStockList.Add(1)//Cabalist = 13
+    call heroStockList.Add(1)//Cleric = 14
+    call heroStockList.Add(1)//Fairy = 15
+    call heroStockList.Add(1)//Priest = 16
+    call heroStockList.Add(1)//Tree = 17
+    call heroStockList.Add(1)//Ranger = 18
+    call heroStockList.Add(1)//Sniper = 19
+    call heroStockList.Add(1)//Commander = 20
+    call heroStockList.Add(1)//Pandaren = 21
+    call heroStockList.Add(1)//Sentinel = 22
+    call heroStockList.Add(1)//GlacialMaster = 23
+    call heroStockList.Add(1)//Farmer = 24
+    call heroStockList.Add(1)//Paladin = 25
+    call heroStockList.Add(1)//MountainGiant = 26
+    call heroStockList.Add(1)//Keeper = 27
+    call heroStockList.Add(1)//Shaman = 28
+    call heroStockList.Add(1)//MortalTeam = 29
+endfunction
+
+private function SetupRandomNumberList takes nothing returns nothing
+    local integer i = 0
+    set allRandomNumberList = IntegerList.create()
+    set tankerRandomNumberList = IntegerList.create()
+    set dealerRandomNumberList = IntegerList.create()
+    set healerRandomNumberList = IntegerList.create()
+    loop
+        exitwhen not (i < HeroType.MAX)
+            if(i != HeroType.Gardener and i != HeroType.Farmer) then
+                call allRandomNumberList.Add(i)
+            endif
+            set i = i+1
+    endloop
+    call dealerRandomNumberList.Add(HeroType.DruidOfClaw)
+    call dealerRandomNumberList.Add(HeroType.DemonHunter)
+    call dealerRandomNumberList.Add(HeroType.Warden)
+    call dealerRandomNumberList.Add(HeroType.Arkmage)
+    //call dealerRandomNumberList.Add(HeroType.Gardener)
+    
+    call dealerRandomNumberList.Add(HeroType.Warlock)
+    call tankerRandomNumberList.Add(HeroType.MountinKing)
+    call dealerRandomNumberList.Add(HeroType.BloodMage)
+    call dealerRandomNumberList.Add(HeroType.BladeMaster)
+    call dealerRandomNumberList.Add(HeroType.DarkWolf)
+    
+    call dealerRandomNumberList.Add(HeroType.LightingMan)
+    call tankerRandomNumberList.Add(HeroType.Tauren)
+    call healerRandomNumberList.Add(HeroType.ForestWisp)
+    call healerRandomNumberList.Add(HeroType.Cabalist)
+    call healerRandomNumberList.Add(HeroType.Cleric)
+    
+    call healerRandomNumberList.Add(HeroType.Fairy)
+    call healerRandomNumberList.Add(HeroType.Priest)
+    call tankerRandomNumberList.Add(HeroType.Tree)
+    call dealerRandomNumberList.Add(HeroType.Ranger)
+    call dealerRandomNumberList.Add(HeroType.Sniper)
+    
+    call tankerRandomNumberList.Add(HeroType.Commander)
+    call tankerRandomNumberList.Add(HeroType.Pandaren)
+    call dealerRandomNumberList.Add(HeroType.Sentinel)
+    call dealerRandomNumberList.Add(HeroType.GlacialMaster)
+    call dealerRandomNumberList.Add(HeroType.Paladin)
+    call tankerRandomNumberList.Add(HeroType.MountainGiant)
+    call healerRandomNumberList.Add(HeroType.Keeper)
+    call dealerRandomNumberList.Add(HeroType.Shaman)
+    call dealerRandomNumberList.Add(HeroType.MortalTeam)
+endfunction
+
+private function isHeroSanctum takes nothing returns boolean
+    if(GetUnitTypeId(GetFilterUnit()) == 'n000' and GetOwningPlayer(GetFilterUnit()) == GetOwningPlayer(GetTriggerUnit())) then
+        call RemoveUnit(GetFilterUnit())
+    endif
+    return false
+endfunction
+
+
+function InHeroRect takes nothing returns boolean
+    return isUnitAlive(GetFilterUnit()) and GetUnitTypeId(GetFilterUnit()) != 'H015' and  GetUnitTypeId(GetFilterUnit()) != 'H01E' and  GetUnitTypeId(GetFilterUnit()) != 'H01F' and  GetUnitTypeId(GetFilterUnit()) != 'H01D' and IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO) == true  and RectContainsUnit(gg_rct_NightElfHeroTown, GetFilterUnit())
+endfunction
+
+function GetPickedHero takes player playerTarget returns unit
+    local unit uTarget = null
+    call GroupEnumUnitsOfPlayer( udg_TempGroup, playerTarget, Condition(function InHeroRect) )
+    set uTarget = FirstOfGroup(udg_TempGroup)
+    call GroupClear(udg_TempGroup)
+    return uTarget
+endfunction
+
+
+function GetPlayerJobString takes nothing returns string
+    return "-"+ColorForm(" 탱커 "+IntToString(nTankerPlayerCount)+"명",Color.Tanker)+ColorForm(" 딜러 "+IntToString(nDealerPlayerCount)+"명",Color.Dealer)+ColorForm(" 힐러 "+IntToString(nHealerPlayerCount)+"명",Color.Healer)
+endfunction
+
+
+private function SetupHeroWithoutRand takes unit pickedUnit returns nothing
+    local integer unitTypeId = GetUnitTypeId(pickedUnit)
+    local integer pickedHero = GetHeroTypeByUnitTypeId(unitTypeId) 
+    local player targetPlayer = GetOwningPlayer(pickedUnit)
+    local integer playerNumber = GetPlayerId(targetPlayer)
+    local string msg = ""
+    local group g = null
+    
+    if(pickedUnit == null) then
+        return
+    endif
+    
+    debug call Log("[SetupHero] player"+ IntToString(playerNumber))
+
+    debug call Log("[SetupHero] unitTypeId"+ IntToString(unitTypeId))
+    
+    debug call Log("[SetupHero] Not Random Unit")
+    debug call Log("playerNumber "+ IntToString(playerNumber))
+    ///중복등록 방지
+    if udg_bPlayerSelected[playerNumber] then
+    debug call Log("[SetupHero] Already Picked")
+        return
+    endif
+     //영웅등록됬는가? 이제 이거 isHeroSetuped로 바꿔야함
+     //TEST
+    set udg_bPlayerSelected[playerNumber] = true
+    debug call Log("[SetupHero] Pick This")
+    debug call Log("[SetupHero] pickedHero"+ IntToString(pickedHero))
+    
+    //TODO : Change This
+    //set isHeroSetuped[playerNumber] = true
+
+    //call Log("UnitTypeId "+IntToString(unitTypeId))
+    //call Log("pickedHero "+IntToString(pickedHero))
+    //뽑힌 영웅 재고--
+    debug call Log("heroStockList[pickedHero] "+IntToString(heroStockList[pickedHero]))
+    set heroStockList[pickedHero] = heroStockList[pickedHero]-1
+    debug call Log("heroStockList[pickedHero] "+IntToString(heroStockList[pickedHero]))
+    ///재고가 남지 않았으면 대상을 다시 뽑을 수 없도록 랜덤리스트에서 제거
+    if heroStockList[pickedHero] <= 0 then
+    debug call Log("[SetupHero] Remove1")
+        call allRandomNumberList.Remove(pickedHero)
+    debug call Log("[SetupHero] Remove2")
+        call tankerRandomNumberList.Remove(pickedHero)
+    debug call Log("[SetupHero] Remove3")
+        call healerRandomNumberList.Remove(pickedHero)
+    debug call Log("[SetupHero] Remove4")
+        call dealerRandomNumberList.Remove(pickedHero)
+    endif
+    debug call Log("[SetupHero] Start Setup")
+    //Do Setup
+    //골드지급
+    call AdjustPlayerStateBJ( udg_nStartGold, targetPlayer, PLAYER_STATE_RESOURCE_GOLD )
+    //죽을때 트리거실행할 트리거 등록
+    call TriggerRegisterUnitEvent( gg_trg_PlayerDead, pickedUnit, EVENT_UNIT_DEATH )
+    // 영웅 등록
+    set udg_HeroPlayer[playerNumber] = pickedUnit
+    //타운에있는 성소 제거
+    set g = CreateGroup()
+    call GroupEnumUnitsInRect(g, gg_rct_NightElfHeroTown, Filter( function isHeroSanctum))
+    set g = null
+    debug call Log("[SetupHero] RemoveTown")
+
+    //직업군 등록
+    if (isHealerUnit(pickedUnit)) then
+        if(GetHeroTypeByUnitTypeId(GetUnitTypeId(pickedUnit)) != HeroType.Keeper)then
+            set udg_bGoldBonus1[playerNumber+1] = true
+        endif
+        set udg_bHealerPlayer[playerNumber+1] = true
+        call GroupAddUnitSimple( pickedUnit, udg_HealerList )
+        set nHealerPlayerCount = nHealerPlayerCount + 1
+    elseif (isTankerUnit(pickedUnit)) then
+        set udg_bTankerPlayer[playerNumber+1] = true
+        call GroupAddUnitSimple( pickedUnit, udg_TankerList )
+        set nTankerPlayerCount = nTankerPlayerCount + 1
+    else
+        set nDealerPlayerCount = nDealerPlayerCount + 1
+        //Another?
+    endif
+
+    debug call Log("[SetupHero] SetupHero")
+    //영웅 등록
+    if ( pickedHero == HeroType.ForestWisp ) then
+            set udg_uHeroWisp = pickedUnit
+    elseif ( pickedHero == HeroType.Priest ) then
+            call TriggerRegisterUnitEvent( gg_trg_PriestSkillQ, pickedUnit, EVENT_UNIT_SPELL_EFFECT )
+            call TriggerRegisterUnitEvent( gg_trg_PriestSkillW, pickedUnit, EVENT_UNIT_SPELL_EFFECT )
+    elseif ( pickedHero == HeroType.Cleric ) then
+            set udg_uHeroCleric = pickedUnit
+            set udg_playerCleric = GetOwningPlayer(pickedUnit)
+    elseif ( pickedHero == HeroType.DruidOfClaw ) then
+            set udg_uHeroDruidOfClaw = pickedUnit
+    elseif ( pickedHero == HeroType.Ranger ) then
+            set uRanger = pickedUnit
+    elseif ( pickedHero == HeroType.Farmer ) then
+            set g_uFarmer = pickedUnit
+            call UnitAddChargedItemById(pickedUnit,CornSeed,2)
+    endif
+    
+    call SuspendHeroXPBJ( false, pickedUnit )
+    debug call Log("[SetupHero] PrintMsg")
+    //메세지 출력
+    set msg = GetPlayerNameWithColor(targetPlayer)+"님이 "+GetUnitStringWithColor(pickedUnit)+"를 선택했습니다."
+    set msg = msg + "\n" + GetPlayerJobString()
+    call ShowNotificationAll(msg) 
+    call SetPlayerName(targetPlayer, GetPlayerNameWithColor(targetPlayer)+"|r("+GetUnitStringWithColor(pickedUnit)+")")
+    
+    
+    //Clear
+    set targetPlayer = null
+endfunction 
+
+
+private function PickHero takes player pickPlayer, integer pickedHero returns nothing
+    //JustCreateUnit
+    local integer heroUnitid = GetHeroUnitId(pickedHero)
+    debug call Log("[PickHero] pickedHero" + IntToString(pickedHero))
+    
+    //넘 귀찮아서 걍 두번 구입함;
+    if(heroUnitid == 'H00Z' or heroUnitid == 'H00S' or heroUnitid == 'N01K' or heroUnitid == 'E00A' or heroUnitid == 'O007' or heroUnitid == 'H005' or heroUnitid == 'H004' or heroUnitid == 'H002' or heroUnitid == 'H00G' or heroUnitid == 'H00K' or heroUnitid == 'H001' or heroUnitid == 'H00W') then
+        call IssueNeutralImmediateOrderById( pickPlayer, gg_unit_h000_0115, heroUnitid )
+    else
+        call IssueNeutralImmediateOrderById( pickPlayer, gg_unit_h00Y_0199, heroUnitid )
+    endif
+    //넘 귀찮아서 걍 두번 구입함;
+    call IssueNeutralImmediateOrderById( pickPlayer, gg_unit_h01S_0292, heroUnitid )
+    
+    call SetupHeroWithoutRand(GetPickedHero(pickPlayer))
+    
+    set isHeroRandomPicked[GetPlayerId(pickPlayer)] = true
+    debug call Log("[PickHero] paased pickedHero" + IntToString(pickedHero))
+endfunction
+
+function SelectHero takes player pickPlayer, integer selectType returns nothing
+    local integer random = 0
+    local integer pickedHero = 0
+    
+    debug call Log("random " + IntToString(random))
+    if udg_bPlayerSelected[GetPlayerId(pickPlayer)] == true then
+        return
+    endif
+    
+    if(isHeroRandomPicked[GetPlayerId(pickPlayer)]) then
+        return
+    endif
+    
+    debug call Log("pickedHero " + IntToString(pickedHero))
+    debug call Log("selectType " + IntToString(selectType))
+    
+    if selectType == SelectType.Random then
+        if allRandomNumberList.isEmpty() then
+            call ShowNotification(pickPlayer, "모든 유닛이 전부 선택되었습니다.")
+            return
+        endif
+        call AdjustPlayerStateBJ( nAllRandomBonus, pickPlayer, PLAYER_STATE_RESOURCE_GOLD )
+        call ShowNotificationAll(ColorForm((GetPlayerNameWithColor(pickPlayer)+"님이 "+ColorForm("전체무작위",Color.MainNoti)+" 보너스 "+IntToString(nAllRandomBonus)+"골드를 획득하였습니다!"),"|cffadff00"))
+        set random = GetRandomInt(0,allRandomNumberList.Count-1)
+        set pickedHero = allRandomNumberList[random]
+    elseif selectType == SelectType.TankerRandom then
+        if tankerRandomNumberList.isEmpty() then
+            call ShowNotification(pickPlayer, "이미 탱커유닛이 전부 선택되었습니다.")
+            return
+        endif
+        call AdjustPlayerStateBJ( nTankerRandomBonus, pickPlayer, PLAYER_STATE_RESOURCE_GOLD )
+        call ShowNotificationAll(ColorForm((GetPlayerNameWithColor(pickPlayer)+"님이 "+ColorForm("탱커무작위",Color.Tanker)+" 보너스 "+IntToString(nTankerRandomBonus )+"골드를 획득하였습니다!"),"|cffadff00"))
+        set random = GetRandomInt(0,tankerRandomNumberList.Count-1)
+        set pickedHero = tankerRandomNumberList[random]
+    elseif selectType == SelectType.HealerRandom then
+        if healerRandomNumberList.isEmpty() then
+            call ShowNotification(pickPlayer, "이미 힐러유닛이 전부 선택되었습니다.")
+            return
+        endif
+        call AdjustPlayerStateBJ( nHealerRandomBonus, pickPlayer, PLAYER_STATE_RESOURCE_GOLD )
+        call ShowNotificationAll(ColorForm((GetPlayerNameWithColor(pickPlayer)+"님이 "+ColorForm("힐러무작위",Color.Healer)+" 보너스 "+IntToString(nHealerRandomBonus )+"골드를 획득하였습니다!"),"|cffadff00"))
+        set random = GetRandomInt(0,healerRandomNumberList.Count-1)
+        set pickedHero = healerRandomNumberList[random]
+    elseif selectType == SelectType.DealerRandom then
+        if dealerRandomNumberList.isEmpty() then
+            call ShowNotification(pickPlayer, "이미 딜러유닛이 전부 선택되었습니다.")
+            return
+        endif
+        call AdjustPlayerStateBJ( nDealerRandomBonus, pickPlayer, PLAYER_STATE_RESOURCE_GOLD )
+        call ShowNotificationAll(ColorForm((GetPlayerNameWithColor(pickPlayer)+"님이 "+ColorForm("딜러무작위",Color.Dealer)+" 보너스 "+IntToString(nDealerRandomBonus )+"골드를 획득하였습니다!"),"|cffadff00"))
+        set random = GetRandomInt(0,dealerRandomNumberList.Count-1)
+        set pickedHero = dealerRandomNumberList[random]
+    endif
+    debug call Log("random " + IntToString(random) +"!")
+    debug call Log("pickedHero " + IntToString(pickedHero) +"!")
+    call PickHero(pickPlayer, pickedHero)
+endfunction
+
+function RemoveAllSanctums takes nothing returns nothing
+    local group g = null
+    set g = CreateGroup()
+    call GroupEnumUnitsInRect(g, gg_rct_NightElfHeroTown, Filter( function isHeroSanctum))
+    set g = null
+endfunction
+
+private function SetupHero takes unit pickedUnit returns nothing
+    local integer unitTypeId = GetUnitTypeId(pickedUnit)
+    local integer pickedHero = GetHeroTypeByUnitTypeId(unitTypeId) 
+    local player targetPlayer = GetOwningPlayer(pickedUnit)
+    local integer playerNumber = GetPlayerId(targetPlayer)
+    local string msg = ""
+    local group g = null
+    
+    debug call Log("[SetupHero] player"+ IntToString(playerNumber))
+
+    debug call Log("[SetupHero] unitTypeId"+ IntToString(unitTypeId))
+    
+    ///랜덤유닛은 지워버림
+    if(unitTypeId == 'H015') then
+        debug call Log("[SetupHero] Random")
+        call RemoveUnit(pickedUnit)
+        call SelectHero(targetPlayer, SelectType.Random)
+        return
+    elseif(unitTypeId == 'H01E') then
+        call RemoveUnit(pickedUnit)
+        call SelectHero(targetPlayer, SelectType.TankerRandom)
+        return
+    elseif(unitTypeId == 'H01F') then
+        call RemoveUnit(pickedUnit)
+        call SelectHero(targetPlayer, SelectType.DealerRandom)
+        return
+    elseif(unitTypeId == 'H01D') then
+        call RemoveUnit(pickedUnit)
+        call SelectHero(targetPlayer,SelectType.HealerRandom)
+        return
+    endif
+
+    debug call Log("[SetupHero] Not Random Unit")
+    debug call Log("playerNumber "+ IntToString(playerNumber))
+    ///중복등록 방지
+    if udg_bPlayerSelected[playerNumber] then
+    debug call Log("[SetupHero] Already Picked")
+        return
+    endif
+     //영웅등록됬는가? 이제 이거 isHeroSetuped로 바꿔야함
+     //TEST
+    set udg_bPlayerSelected[playerNumber] = true
+    debug call Log("[SetupHero] Pick This")
+    debug call Log("[SetupHero] pickedHero"+ IntToString(pickedHero))
+    
+    //TODO : Change This
+    //set isHeroSetuped[playerNumber] = true
+
+    //call Log("UnitTypeId "+IntToString(unitTypeId))
+    //call Log("pickedHero "+IntToString(pickedHero))
+    //뽑힌 영웅 재고--
+    debug call Log("heroStockList[pickedHero] "+IntToString(heroStockList[pickedHero]))
+    set heroStockList[pickedHero] = heroStockList[pickedHero]-1
+    debug call Log("heroStockList[pickedHero] "+IntToString(heroStockList[pickedHero]))
+    ///재고가 남지 않았으면 대상을 다시 뽑을 수 없도록 랜덤리스트에서 제거
+    if heroStockList[pickedHero] <= 0 then
+    debug call Log("[SetupHero] Remove1")
+        call allRandomNumberList.Remove(pickedHero)
+    debug call Log("[SetupHero] Remove2")
+        call tankerRandomNumberList.Remove(pickedHero)
+    debug call Log("[SetupHero] Remove3")
+        call healerRandomNumberList.Remove(pickedHero)
+    debug call Log("[SetupHero] Remove4")
+        call dealerRandomNumberList.Remove(pickedHero)
+    endif
+    debug call Log("[SetupHero] Start Setup")
+    //Do Setup
+    //골드지급
+    call AdjustPlayerStateBJ( udg_nStartGold, targetPlayer, PLAYER_STATE_RESOURCE_GOLD )
+    //죽을때 트리거실행할 트리거 등록
+    call TriggerRegisterUnitEvent( gg_trg_PlayerDead, pickedUnit, EVENT_UNIT_DEATH )
+    // 영웅 등록
+    set udg_HeroPlayer[playerNumber] = pickedUnit
+    //타운에있는 성소 제거
+    set g = CreateGroup()
+    call GroupEnumUnitsInRect(g, gg_rct_NightElfHeroTown, Filter( function isHeroSanctum))
+    set g = null
+    debug call Log("[SetupHero] RemoveTown")
+
+    //직업군 등록
+    if (isHealerUnit(pickedUnit)) then
+        if(GetHeroTypeByUnitTypeId(GetUnitTypeId(pickedUnit)) != HeroType.Keeper)then
+            set udg_bGoldBonus1[playerNumber+1] = true
+        endif
+        set udg_bHealerPlayer[playerNumber+1] = true
+        call GroupAddUnitSimple( pickedUnit, udg_HealerList )
+        set nHealerPlayerCount = nHealerPlayerCount + 1
+    elseif (isTankerUnit(pickedUnit)) then
+        set udg_bTankerPlayer[playerNumber+1] = true
+        call GroupAddUnitSimple( pickedUnit, udg_TankerList )
+        set nTankerPlayerCount = nTankerPlayerCount + 1
+    else
+        set nDealerPlayerCount = nDealerPlayerCount + 1
+        //Another?
+    endif
+
+    debug call Log("[SetupHero] SetupHero")
+    //영웅 등록
+    if ( pickedHero == HeroType.ForestWisp ) then
+            set udg_uHeroWisp = pickedUnit
+    elseif ( pickedHero == HeroType.Priest ) then
+            call TriggerRegisterUnitEvent( gg_trg_PriestSkillQ, pickedUnit, EVENT_UNIT_SPELL_EFFECT )
+            call TriggerRegisterUnitEvent( gg_trg_PriestSkillW, pickedUnit, EVENT_UNIT_SPELL_EFFECT )
+    elseif ( pickedHero == HeroType.Cleric ) then
+            set udg_uHeroCleric = pickedUnit
+            set udg_playerCleric = GetOwningPlayer(pickedUnit)
+    elseif ( pickedHero == HeroType.DruidOfClaw ) then
+            set udg_uHeroDruidOfClaw = pickedUnit
+    elseif ( pickedHero == HeroType.Ranger ) then
+            set uRanger = pickedUnit
+    elseif ( pickedHero == HeroType.Farmer ) then
+            set g_uFarmer = pickedUnit
+            call UnitAddChargedItemById(pickedUnit,CornSeed,2)
+    endif
+    
+    call SuspendHeroXPBJ( false, pickedUnit )
+    debug call Log("[SetupHero] PrintMsg")
+    //메세지 출력
+    set msg = GetPlayerNameWithColor(targetPlayer)+"님이 "+GetUnitStringWithColor(pickedUnit)+"를 선택했습니다."
+    set msg = msg + "\n" + GetPlayerJobString()
+    call ShowNotificationAll(msg) 
+    call SetPlayerName(targetPlayer, GetPlayerNameWithColor(targetPlayer)+"|r("+GetUnitStringWithColor(pickedUnit)+")")
+    
+    
+    //Clear
+    set targetPlayer = null
+endfunction 
+
+private function Init takes nothing returns nothing
+    local integer i = 0
+    
+    loop
+        exitwhen not(i < D_MAX_PLAYER)
+            set isHeroRandomPicked[i] = false
+            set i = i + 1
+    endloop
+    
+    call SetupHeroStockList()
+    call SetupRandomNumberList()
+endfunction
+
+private function Pick takes nothing returns nothing
+    call SelectHero(Player(0), SelectType.Random)
+endfunction
+
+private function OnHeroEnter takes nothing returns nothing
+        debug call Log("[OnHeroEnter] Start")
+    //TODO : 나중에 최적화 다시하자.. 랜덤유닛은 결국 SetupHero까지 가서 지워진다
+    //if udg_bPlayerSelected[GetPlayerId(GetOwningPlayer(GetTriggerUnit()))] == true then
+    //    return
+    //endif
+    if ( not ( IsUnitInForce(GetTriggerUnit(), udg_GroupPlayer) == true ) ) then
+       debug call Log("[OnHeroEnter] A")
+        return
+    endif
+    if ( not ( IsUnitType(GetTriggerUnit(), UNIT_TYPE_HERO) == true ) ) then
+        debug call Log("[OnHeroEnter] B")
+        return
+    endif
+        debug call Log("[OnHeroEnter] End")
+    call SetupHero(GetTriggerUnit())
+endfunction
+
+function Start takes nothing returns nothing
+    local trigger t = CreateTrigger(  )
+    local trigger tp = CreateTrigger(  )
+    local trigger heroEnter = CreateTrigger(  )
+    call TriggerRegisterTimerEventSingle( t, 0.00 )
+    call TriggerAddAction( t, function Init )
+    call TriggerRegisterEnterRectSimple( heroEnter, gg_rct_NightElfHeroTown )
+    call TriggerAddAction( heroEnter, function OnHeroEnter )
+endfunction
+
+endlibrary

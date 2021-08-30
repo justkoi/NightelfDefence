@@ -1,0 +1,96 @@
+scope CourierUnloading
+
+globals
+    timer array moveTimer[24]
+endglobals
+
+struct CourierInfo
+    public unit uHero = null
+    public unit uCourier = null
+
+    public static method create takes unit uHero, unit uCourier returns CourierInfo
+        local thistype this = thistype.allocate()
+        set this.uHero = uHero
+        set this.uCourier = uCourier
+        return this
+    endmethod
+
+    method onDestroy takes nothing returns nothing
+        set uHero = null
+        set uCourier = null
+    endmethod
+endstruct
+
+function Trig_CourierUnloading_Update takes nothing returns nothing
+    local CourierInfo info = GetTimerData(GetExpiredTimer())
+    local integer invenCount = 0
+    local integer i = 0
+    local integer j = 0
+    local item tempItem = null
+    if(info.uHero == null or isUnitDead(info.uHero) or GetUnitCurrentOrder(info.uCourier) != String2OrderIdBJ("move")) then
+        debug call Log("****R1")
+        call ReleaseTimer(GetExpiredTimer())
+        set moveTimer[GetPlayerId(GetOwningPlayer(info.uCourier))] = null
+        call info.destroy()
+    elseif(info.uHero != null and DistanceBetweenUnits(info.uHero,info.uCourier) <= 500) then
+        //debug call Log("****R2-1")
+        set invenCount = 6 - UnitInventoryCount(info.uHero)
+        debug call Log("****R2-2")
+        loop
+            exitwhen (i>=invenCount or j>=6)
+            set tempItem = UnitItemInSlot(info.uCourier, j)
+            if(tempItem != null) then
+                call UnitAddItem( info.uHero, tempItem )
+                set i = i+1
+            endif
+            set j = j+1
+        endloop
+        debug call Log("****R2-3")
+        call ReleaseTimer(GetExpiredTimer())
+        set moveTimer[GetPlayerId(GetOwningPlayer(info.uCourier))] = null
+        call info.destroy()
+    endif
+    set tempItem = null
+endfunction
+
+function Trig_CourierUnloading_Actions takes nothing returns nothing
+    local unit uCourier = GetTriggerUnit()
+    local integer playerNumber = GetPlayerId(GetOwningPlayer(uCourier))
+    local unit uHero = udg_HeroPlayer[playerNumber]
+    local CourierInfo info = CourierInfo.create(uHero, uCourier)
+    local CourierInfo lastInfo = NULL
+    if(moveTimer[playerNumber] != null) then
+        set lastInfo = GetTimerData(moveTimer[playerNumber])
+        call lastInfo.destroy()
+        call ReleaseTimer(moveTimer[playerNumber])
+    endif
+    set moveTimer[playerNumber] = NewTimerEx(info)
+    if(uHero == null) then
+        return
+    endif
+    if(isUnitDead(uHero)) then
+        return
+    endif
+
+    call IssueTargetOrderBJ( uCourier, "move", uHero)
+    call TimerStart(moveTimer[playerNumber], 0.04, true, function Trig_CourierUnloading_Update)
+    set uCourier = null
+    set uHero = null
+    //UnitInventoryCount
+    //call IssueInstantTargetOrder(uCourier, "dropitem", uHero, UnitItemInSlot(uCourier, 0))
+    //call UnitAddItemSwapped( GetLastCreatedItem(), uCourier )
+endfunction
+function InitTrig_CourierUnloading_Start takes nothing returns nothing
+    if ( not ( GetSpellAbilityId() == 'A0DD' ) ) then
+        return
+    endif
+    call Trig_CourierUnloading_Actions()
+endfunction
+//===========================================================================
+function InitTrig_CourierUnloading takes nothing returns nothing
+    set gg_trg_CourierUnloading = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ(  gg_trg_CourierUnloading, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction( gg_trg_CourierUnloading, function InitTrig_CourierUnloading_Start )
+endfunction
+
+endscope

@@ -1,0 +1,304 @@
+library LinkedList requires String, SpawnData, MovementData, AttackHit
+
+
+//! textmacro LinkedList takes LIST_NAME, T, DEFAULT
+    struct $T$Node
+        public $T$ data
+        public $T$Node prev
+        public $T$Node next
+        static method create takes $T$ value returns thistype
+            local thistype this = thistype.allocate()
+            set this.data = value
+            set this.prev = NULL
+            set this.next = NULL
+            return this
+        endmethod
+        /*
+        method onDestroy takes nothing returns nothing 
+            set data = $DEFAULT$
+            set prev = NULL
+            set next = NULL
+        endmethod
+        */
+    endstruct
+
+    struct $LIST_NAME$List
+        public $T$Node head
+        public $T$Node tail
+        public integer Count
+        static method create takes nothing returns thistype
+            local thistype this = thistype.allocate(  )
+            set head = NULL
+            set tail = NULL
+            set Count = 0
+            return this
+        endmethod
+        
+        public method AddFirst takes $T$ value returns nothing
+            local $T$Node newNode = $T$Node.create(value)
+            set newNode.next = head
+            set head.prev = newNode
+            set head = newNode
+            set Count = Count + 1
+            if head.next == NULL then
+                set tail = head
+                //debug call Log("Head is Null!")
+            endif
+            //debug call Log("AddedFirst")
+        endmethod
+        
+        private method AddTail takes $T$ value returns nothing
+            local $T$Node newNode = $T$Node.create(value)
+            set tail.next = newNode
+            set newNode.prev = tail
+            set tail = newNode
+            set Count = Count + 1
+            //call Log("AddedTail")// + IntToString(value)
+        endmethod
+        
+        public method Add takes $T$ value returns nothing
+            //call Log("TryAdd " + IntToString(value))
+            if Count == 0 then
+                call AddFirst(value)
+            else
+                call AddTail(value)
+            endif
+        endmethod
+        
+        private method getNode takes integer index returns $T$Node
+            local $T$Node nodeIter = head
+            local integer i = 0
+            //call Log("["+IntToString(index)+"] = "+" Headdata:" + IntToString(nodeIter.data) + " Count:" + IntToString(Count))
+            if index >= Count then
+                call LogError("[List-[]] index out of Range! "+IntToString(index)+">="+IntToString(Count))
+                return 0
+            endif
+            loop
+                exitwhen i >= index
+                    //call Log("["+IntToString(index)+"] loop = "+IntToString(i)+">"+IntToString(index)+" data:" + IntToString(nodeIter.data))
+                    set nodeIter = nodeIter.next
+                    set i = i + 1
+            endloop
+            return nodeIter
+        endmethod
+        
+        public method operator [] takes integer index returns $T$
+            local $T$Node nodeIter = head
+            local integer i = 0
+            //call Log("["+IntToString(index)+"] = "+" Headdata:" + IntToString(nodeIter.data) + " Count:" + IntToString(Count))
+            if index >= Count then
+                call LogError("[List-[]] index out of Range! "+IntToString(index)+">="+IntToString(Count))
+                return $DEFAULT$
+            endif
+            loop
+                exitwhen i >= index
+                    //call Log("["+IntToString(index)+"] loop = "+IntToString(i)+">"+IntToString(index)+" data:" + IntToString(nodeIter.data))
+                    set nodeIter = nodeIter.next
+                    set i = i + 1
+            endloop
+            return nodeIter.data
+        endmethod
+        
+        public method operator []= takes integer index, $T$ value returns nothing
+            local $T$Node nodeIter = head
+            local integer i = 0
+            //call Log("["+IntToString(index)+"] = "+" Headdata:" + IntToString(nodeIter.data) + " Count:" + IntToString(Count))
+            if index >= Count then
+                call LogError("[List-[]=] index out of Range! "+IntToString(index)+">="+IntToString(Count))
+                return
+            endif
+            loop
+                exitwhen i >= index
+                    //call Log("["+IntToString(index)+"] loop = "+IntToString(i)+">"+IntToString(index)+" data:" + IntToString(nodeIter.data))
+                    set nodeIter = nodeIter.next
+                    set i = i + 1
+            endloop
+            set nodeIter.data = value
+        endmethod
+        
+        private method DoInsert takes integer index, $T$ value returns nothing
+             local $T$Node temp1 = getNode(index)
+                local $T$Node temp2 = temp1.next
+                local $T$Node newNode = $T$Node.create(value)
+                set temp1.next = newNode
+                set newNode.prev = temp1
+                set newNode.next = temp2
+                set temp2.prev = newNode
+                set Count = Count + 1
+                if newNode.next == NULL then
+                    set tail = newNode
+                endif
+        endmethod
+        
+        public method Insert takes integer index, $T$ value returns nothing
+            if index == 0 then
+               call AddFirst(value)
+            else
+               call DoInsert(index, value)
+            endif
+        endmethod
+        
+        public method RemoveFirst takes nothing returns $T$
+            local $T$Node temp = head
+            local $T$ data = temp.data
+            set head = temp.next
+            set head.prev = NULL
+            call temp.destroy()
+            set temp = NULL
+            set Count = Count - 1
+            return data
+        endmethod
+        
+        private method DoRemove takes integer index returns $T$
+            local $T$Node temp = getNode(index)
+            local $T$Node deleteTarget = temp
+            local $T$Node A = temp.prev
+            local $T$Node B = temp.next
+            local $T$ data = deleteTarget.data
+            if(A != NULL) then
+                set A.next = B
+            endif
+            if(B != NULL) then
+                set B.prev = A
+            endif
+            if deleteTarget == tail then
+                set tail = A
+            endif
+            call deleteTarget.destroy()
+            set deleteTarget = NULL
+            set Count = Count - 1
+            return data
+        endmethod
+        
+        public method RemoveNode takes $T$Node temp returns $T$Node
+            local $T$Node deleteTarget = temp
+            local $T$Node A = temp.prev
+            local $T$Node B = temp.next
+            local $T$Node next = NULL
+            if(A != NULL) then
+                set A.next = B
+            endif
+            if(B != NULL) then
+                set B.prev = A
+            endif
+            if deleteTarget == head then
+                set head = B
+            endif
+            if deleteTarget == tail then
+                set tail = A
+                set next = tail
+            else
+                set next = B
+            endif
+            call deleteTarget.destroy()
+            set deleteTarget = NULL
+            set Count = Count - 1
+            return next
+        endmethod
+        
+        public method RemoveAt takes integer index returns $T$
+            local $T$ data
+            //index out of Range
+            if index >= Count then
+                call LogError("[List-RemoveAt] index out of Range! "+IntToString(index)+">="+IntToString(Count))
+                return $DEFAULT$
+            endif
+            if index == 0 then
+                set data = RemoveFirst()
+                return data
+            else
+                set data = DoRemove(index)
+                return data
+            endif
+            return $DEFAULT$
+        endmethod
+        
+        public method Size takes nothing returns integer
+            return Count
+        endmethod
+        
+        public method IndexOf takes $T$ data returns integer
+            local $T$Node temp = head
+            local integer i = 0
+            loop
+                exitwhen temp.data == data
+                    set temp = temp.next
+                    set i = i + 1
+                    ///끝까지 돌았는데 없음
+                    if temp == NULL then
+                        return -1
+                    endif
+            endloop
+            return i
+        endmethod
+        
+        public method Remove takes $T$ data returns $T$
+            local $T$Node temp = head
+            local $T$Node tempPrev = NULL
+            local integer i = 0
+            local $T$ savedData = $DEFAULT$
+            //Find
+            loop
+                exitwhen temp.data == data
+                    set tempPrev = temp
+                    set temp = temp.next
+                    set i = i+1
+                    ///끝까지 돌았는데 없음
+                    if temp == NULL then
+                        return $DEFAULT$
+                    endif
+            endloop
+            set savedData = temp.data
+            call RemoveNode(temp)
+            return savedData
+        endmethod
+        
+        public method isEmpty takes nothing returns boolean
+            return Count <= 0
+        endmethod
+        /*
+        public method Dump takes nothing returns nothing
+            local $T$Node iter = head
+            local integer i = 0
+            loop 
+                exitwhen not(iter != NULL)
+                    call Log("["+IntToString(i)+"] "+IntToString(iter.data))
+                    set iter = iter.next
+                    set i = i+1
+            endloop
+        endmethod
+        */
+        public method AddRange takes $LIST_NAME$List targetList returns nothing
+            local $T$Node iter = targetList.head
+            loop 
+                exitwhen not(iter != NULL)
+                    call Add(iter.data)
+                    set iter = iter.next
+            endloop
+        endmethod
+        
+        public method Clear takes nothing returns nothing
+            loop 
+                exitwhen this.Count <= 0
+                    call this.RemoveFirst()
+            endloop
+        endmethod
+        
+        //must delete $$Node.
+        method onDestroy takes nothing returns nothing
+            call this.Clear()
+        endmethod
+        
+    endstruct
+//! endtextmacro
+//! runtextmacro LinkedList("SpawnData","SpawnData", "0")
+//! runtextmacro LinkedList("Integer","integer", "0")
+//! runtextmacro LinkedList("Unit","unit", "null")
+//! runtextmacro LinkedList("BaseMovementData","BaseMovementData", "0")
+//! runtextmacro LinkedList("EffectData","EffectData", "0")
+//! runtextmacro LinkedList("AttackHit","AttackHit", "0")
+//! runtextmacro LinkedList("AISpell","AISpell", "0")
+//! runtextmacro LinkedList("Spell","Spell", "0")
+//! runtextmacro LinkedList("GameObject","GameObject", "0")
+//! runtextmacro LinkedList("AuraData","AuraData", "0")
+endlibrary

@@ -1,0 +1,446 @@
+library EffectData requires Extensions, LinkedList, Actions
+
+globals
+
+endglobals
+
+
+interface EffectData
+    //이펙트 고유번호
+    public EffectId nEffectId
+    //이펙트 유닛
+    public unit uEffect = null
+    //재생타이머
+    public real fTimer
+    //재생시간
+    public real fTime
+    ///지연된 재생 타이머
+    public real fDelayedTimer
+    ///지연된 재생시간
+    public real fDelayedTime
+    
+    public AttackHitList attackHitList = NULL
+    
+    public boolean isStopped = false
+    
+    public real fRotateAngle = 0
+    public real fSpeed = 1.0
+    public boolean hasCustomAnimation = false
+    public string strAnimationName = "stand"
+
+    public Action_EffectData onEffectStart = NULL
+    public Action_EffectData onEffectEnd = NULL
+    
+    public boolean hasDependency = false
+    
+    public method CreateEffectPos takes nothing returns Vector3
+    //해당 이펙트를 재생합니다.
+    public method Play takes real dt returns nothing
+    //해당 이펙트의 재생을 영구적으로 중지하고 파괴합니다.
+    public method Stop takes nothing returns nothing
+    //해당 이펙트가 만료되었는지 확인합니다.
+    public method isExpired takes nothing returns boolean
+    //재생 이벤트
+    public method OnStart takes nothing returns nothing
+    //중지 이벤트
+    public method OnEnd takes nothing returns nothing
+    public method SetOnEffectEnd takes Action_EffectData onEffectEnd returns nothing
+    ///회전
+    public method RotateTo takes real fAngle returns EffectData
+    public method RotateToUnit takes unit uTarget returns EffectData
+    public method RotateToLoc takes location locTarget returns EffectData
+    public method SetSpeed takes real fSpeed returns EffectData
+    public method SetAnimation takes string strNaame returns EffectData
+    //공격데이터 추가
+    public method AddAttackHit takes AttackHit attackHit returns nothing
+    //공격데이터 추가
+    public method DontFollow takes nothing returns EffectData defaults NULL
+endinterface
+
+///해당 지점에 존재하는 이펙트 데이터
+struct PosEffectData extends EffectData
+    public Vector3 vTarget
+
+    ///이펙트를 대상지점에 x초 동안 생성합니다.
+    public static method create takes EffectId nEffectId, Vector3 vTarget, real fTime, real fDelay returns thistype
+        local thistype this = thistype.allocate()
+        set this.nEffectId = nEffectId
+        //call RemoveUnit(CreateUnit(Player(0),nEffectId,vTarget.x,vTarget.y,bj_UNIT_FACING))
+        set this.fTimer = 0
+        set this.fTime = fTime
+        set this.fDelayedTimer = 0
+        set this.fDelayedTime = fDelay
+        set this.vTarget = vTarget
+        set this.isStopped = false
+        if(fDelayedTime < 0.0001) then
+            call this.StartPlay()
+        endif
+        return this
+    endmethod
+    
+    private method StartPlay takes nothing returns nothing
+        set uEffect = CreateUnit(playerNeutral,nEffectId,vTarget.x,vTarget.y,fRotateAngle)
+        call SetUnitTimeScale(uEffect,fSpeed)
+        if(hasCustomAnimation) then
+            call SetUnitAnimation(uEffect,strAnimationName)
+        endif
+        call OnStart()
+    endmethod
+    
+    ///이펙트를 대상 각도로 회전시킵니다.
+    public method RotateTo takes real fAngle returns EffectData
+        if(uEffect != null) then
+            call SetUnitFacing(uEffect, fAngle)
+        else
+            set fRotateAngle = fAngle
+        endif
+        return this
+    endmethod
+    ///이펙트를 대상 유닛을 바라보게 회전시킵니다.
+    public method RotateToUnit takes unit uTarget returns EffectData
+        call RotateTo(AngleBetweenUnits(uEffect,uTarget))
+        return this
+    endmethod
+    ///이펙트를 대상 지점을 바라보게 회전시킵니다.
+    public method RotateToLoc takes location locTarget returns EffectData
+        local location locEffect = GetUnitLoc(uEffect)
+        call RotateTo(AngleBetweenPoints(locEffect,locTarget))
+        call RemoveLocation(locEffect)
+        set locEffect = null
+        return this
+    endmethod
+    
+    public method SetSpeed takes real fSpeed returns EffectData
+        if(uEffect != null) then
+            call SetUnitTimeScale(uEffect,fSpeed)
+        else 
+            set this.fSpeed = fSpeed
+        endif
+        return this
+    endmethod
+
+    public method SetAnimation takes string strName returns EffectData
+        if(uEffect != null) then
+            set hasCustomAnimation = true
+            call SetUnitAnimation(uEffect,strName)
+        else 
+            set this.strAnimationName = strName
+        endif
+        return this
+    endmethod
+
+
+    private method isDelaying takes nothing returns boolean
+        return (fDelayedTimer < fDelayedTime)
+    endmethod
+
+    public method Play takes real dt returns nothing
+        local AttackHitNode iter = NULL
+        local AttackHit data = NULL
+        if(isDelaying()) then
+            set fDelayedTimer = fDelayedTimer + dt
+            if(not isDelaying()) then
+                set fTimer = fTimer + (fDelayedTimer - fDelayedTime)
+                call StartPlay()
+            else
+                //call Log("EP1")
+                return
+            endif
+        else
+            set fTimer = fTimer + dt
+        endif
+        
+        if(attackHitList == NULL) then
+            //call Log("EP2")
+            return
+        endif
+        
+        set iter = attackHitList.head
+        loop
+            exitwhen not(iter != NULL)
+                set data = iter.data
+                if(data.isExpired()) then
+                    call data.destroy()
+                    set iter = attackHitList.RemoveNode(iter)
+                else
+                    if(data.Play(dt, vTarget)) then
+                        call data.destroy()
+                        set iter = attackHitList.RemoveNode(iter)
+                    else
+                        set iter = iter.next
+                    endif
+                endif
+        endloop
+    endmethod
+
+    public method Stop takes nothing returns nothing
+        set isStopped = true
+    endmethod
+
+    public method isExpired takes nothing returns boolean
+        //debug call Log("[isExpired] " +R2S(fTimer) + R2S(fTime))
+        if (fTimer > fTime) then
+            return true
+        endif
+        if(isStopped) then
+            return true
+        endif
+        return false
+    endmethod
+
+    public method OnStart takes nothing returns nothing
+        if(onEffectStart != NULL) then
+            call onEffectStart.execute(this)
+        endif
+    endmethod
+
+    private method OnEnd takes nothing returns nothing
+        if(onEffectEnd != NULL) then
+            call onEffectEnd.execute(this)
+        endif
+    endmethod
+    
+    public method CreateEffectPos takes nothing returns Vector3
+        return vTarget.Copy()
+    endmethod
+    
+    method onDestroy takes nothing returns nothing
+        local AttackHitNode iter = NULL
+        call OnEnd()
+        
+        if(attackHitList != NULL) then
+            //call Log("ED1")
+            set iter = attackHitList.head
+            loop
+                exitwhen not(iter != NULL)
+                    call iter.data.destroy()
+                    set iter = attackHitList.RemoveNode(iter)
+            endloop
+            call attackHitList.destroy()
+        endif
+        
+        call RemoveUnit(uEffect)
+        set uEffect = null
+        call vTarget.destroy()
+        if(onEffectStart != NULL) then
+            set onEffectStart = NULL
+        endif
+        if(onEffectEnd != NULL) then
+            set onEffectEnd = NULL
+        endif
+    endmethod
+    
+    public method AddAttackHit takes AttackHit attackHit returns nothing
+        if(attackHitList == NULL) then
+            set attackHitList = AttackHitList.create()
+        endif
+        call attackHitList.Add(attackHit)
+    endmethod
+    
+    public method SetOnEffectEnd takes Action_EffectData onEffectEnd returns nothing
+        set this.onEffectEnd = onEffectEnd
+    endmethod
+    
+endstruct
+
+
+//해당 유닛에 붙어다니는 이펙트 데이터
+struct UnitEffectData extends EffectData
+    private unit uRoot
+    ///이펙트를 대상 유닛에 x초 동안 생성합니다.
+    public static method create takes EffectId nEffectId, unit uRoot, real fTime, real fDelay returns thistype
+        local thistype this = thistype.allocate()
+        local location locTemp = GetUnitLoc(uRoot)
+        set this.nEffectId = nEffectId
+        set this.fTimer = 0
+        set this.fTime = fTime
+        set this.fDelayedTimer = 0
+        set this.fDelayedTime = fDelay
+        set this.uRoot = uRoot
+        set this.isStopped = false
+        set this.hasDependency = true
+        if(fDelayedTime < 0.0001) then
+            call this.StartPlay()
+        endif
+        call RemoveLocation(locTemp)
+        set locTemp = null
+        return this
+    endmethod
+    private method StartPlay takes nothing returns nothing
+        set uEffect = CreateUnit(playerNeutral,nEffectId,GetUnitY(uRoot),GetUnitY(uRoot),fRotateAngle)
+        call SetUnitTimeScale(uEffect,fSpeed)
+        if(hasCustomAnimation) then
+            call SetUnitAnimation(uEffect,strAnimationName)
+        endif
+        call UnitMoveToUnit(uEffect,uRoot)
+        call OnStart()
+    endmethod
+    ///이펙트를 대상 각도로 회전시킵니다.
+    public method RotateTo takes real fAngle returns EffectData
+        call SetUnitFacing(uEffect, fAngle)
+        return this
+    endmethod
+    ///이펙트를 대상 유닛을 바라보게 회전시킵니다.
+    public method RotateToUnit takes unit uTarget returns EffectData
+        call RotateTo(AngleBetweenUnits(uEffect,uTarget))
+        return this
+    endmethod
+    ///이펙트를 대상 지점을 바라보게 회전시킵니다.
+    public method RotateToLoc takes location locTarget returns EffectData
+        local location locEffect = GetUnitLoc(uEffect)
+        call RotateTo(AngleBetweenPoints(locEffect,locTarget))
+        call RemoveLocation(locEffect)
+        set locEffect = null
+        return this
+    endmethod
+
+    public method SetSpeed takes real fSpeed returns EffectData
+        if(uEffect != null) then
+            call SetUnitTimeScale(uEffect,fSpeed)
+        else 
+            set this.fSpeed = fSpeed
+        endif
+        return this
+    endmethod
+
+    public method SetAnimation takes string strName returns EffectData
+        if(uEffect != null) then
+            set hasCustomAnimation = true
+            call SetUnitAnimation(uEffect,strName)
+        else 
+            set this.strAnimationName = strName
+        endif
+        return this
+    endmethod
+    
+    private method isDelaying takes nothing returns boolean
+        return (fDelayedTimer < fDelayedTime)
+    endmethod
+    
+    public method Play takes real dt returns nothing
+        local AttackHitNode iter = NULL
+        local AttackHit data = NULL
+        local Vector3 pos = NULL
+        if(isDelaying()) then
+            set fDelayedTimer = fDelayedTimer + dt
+            if(not isDelaying()) then
+                set fTimer = fTimer + (fDelayedTimer - fDelayedTime)
+                call StartPlay()
+            else
+                //call Log("2EP1")
+                return
+            endif
+        else
+            set fTimer = fTimer + dt
+        endif
+        if(hasDependency) then
+            call UnitMoveToUnit(uEffect,uRoot)
+        endif
+        if(attackHitList == NULL) then
+                //call Log("2EP2")
+            return
+        endif
+        
+        set iter = attackHitList.head
+        set pos = Vector3.create(0,0,0).PosFromUnit(uRoot)
+        loop
+            exitwhen not(iter != NULL)
+                set data = iter.data
+                if(data.isExpired()) then
+                    call data.destroy()
+                    set iter = attackHitList.RemoveNode(iter)
+                else
+                    if(data.Play(dt, pos)) then
+                        call data.destroy()
+                        set iter = attackHitList.RemoveNode(iter)
+                    else
+                        set iter = iter.next
+                    endif
+                endif
+        endloop
+        call pos.destroy()
+    endmethod
+
+    public method Stop takes nothing returns nothing
+        set isStopped = true
+    endmethod
+
+    public method isExpired takes nothing returns boolean
+        if (fTimer > fTime) then
+            return true
+        endif
+        if (hasDependency and isUnitDead(uRoot)) then
+            return true
+        endif
+        if(isStopped) then
+            return true
+        endif
+        return false
+    endmethod
+
+    public method OnStart takes nothing returns nothing
+        if(onEffectStart != NULL) then
+            call onEffectStart.execute(this)
+        endif
+    endmethod
+
+    private method OnEnd takes nothing returns nothing
+        debug call Log("[UnitEffectData-OnEnd]")
+        if(onEffectEnd != NULL) then
+            call onEffectEnd.execute(this)
+        endif
+    endmethod
+    
+    public method CreateEffectPos takes nothing returns Vector3
+        return Vector3.create(0,0,0).PosFromUnit(uEffect)
+    endmethod
+    
+    method onDestroy takes nothing returns nothing
+        local AttackHitNode iter = NULL
+        call OnEnd()
+        
+        if(attackHitList != NULL) then
+            //call Log("2ED1")
+            set iter = attackHitList.head
+            loop
+                exitwhen not(iter != NULL)
+                    call iter.data.destroy()
+                    set iter = attackHitList.RemoveNode(iter)
+            endloop
+            call attackHitList.destroy()
+        endif
+        
+        if(onEffectStart != NULL) then
+            set onEffectStart = NULL
+        endif
+        if(onEffectEnd != NULL) then
+            set onEffectEnd = NULL
+        endif
+        
+        call RemoveUnit(uEffect)
+        set uEffect = null
+        set uRoot= null
+        
+    endmethod
+    
+    public method SetOnEffectEnd takes Action_EffectData onEffectEnd returns nothing
+        set this.onEffectEnd = onEffectEnd
+    endmethod
+    
+    method AddAttackHit takes AttackHit attackHit returns nothing
+        if(attackHitList == NULL) then
+            set attackHitList = AttackHitList.create()
+        endif
+        call attackHitList.Add(attackHit)
+        if(attackHit.fTime > this.fTime) then
+            call LogWarning("Wrong AttackHit! attackHitTime must be longger then EffectTime!" + R2S(attackHit.fTime) +" > " + R2S(this.fTime))
+        endif
+    endmethod
+    
+    public method DontFollow takes nothing returns EffectData
+        set hasDependency = false
+        return this
+    endmethod
+endstruct
+
+endlibrary

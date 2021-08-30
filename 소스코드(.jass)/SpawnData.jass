@@ -1,0 +1,248 @@
+library SpawnData requires Time, String
+
+globals
+ public constant integer MaxUnitCounts = 85
+ boolean isNightElfFastSpawn = false
+endglobals
+//스폰 데이터
+interface SpawnData
+    public boolean isSpawnOnce
+    ///스폰 유닛의 플레이어
+    public player pPlayer
+    //스폰되는 유닛의 TypeId
+    public integer nUnitTypeId
+    //스폰할 유닛의 수
+    public integer nNumber
+    ///스폰 장소
+    public location locSpawnLocation
+    public real fStartTime
+    public real fEndTime
+    ///난이도 조건
+    public integer nDifficulty
+    //유닛카운트에 영향을 받지않고 스폰기회가 오면 무조건 스폰함(ex 공중유닛)
+    public boolean canForcedSpawn
+    //조건 리스트
+    //private boolean bCondition
+    ///스폰할 준비가 되었는가?
+    public method isReadyToSpawn takes nothing returns boolean
+    public method StartSpawn takes nothing returns nothing
+    public method isExpired takes nothing returns boolean
+    public method EndSpawn takes nothing returns nothing
+    public method ForcedSpawn takes nothing returns SpawnData
+endinterface
+
+
+struct OnceSpawnData extends SpawnData
+    private boolean hasMsg = false
+    private string strMsg
+    private sound soundMsg
+    
+    public static method create takes player pPlayer, integer nUnitTypeId, integer nNumber, location locSpawnLocation, real fStartTime returns thistype
+            local thistype this = thistype.allocate(  )
+            set this.pPlayer = pPlayer
+            set this.nUnitTypeId = nUnitTypeId
+            set this.nNumber = nNumber
+            set this.locSpawnLocation = locSpawnLocation
+            set this.fStartTime = fStartTime
+            set this.fEndTime = 0
+            set this.hasMsg = false
+            set this.strMsg = null
+            set this.soundMsg = null
+            set this.isSpawnOnce = true
+            set this.nDifficulty = 0
+            set this.canForcedSpawn = false
+            return this
+    endmethod
+    
+    public method onDestroy takes nothing returns nothing
+        //debug call Log("[OnceSpawnData-onDestroy]")
+        call EndSpawn()
+    endmethod
+
+    public method isReadyToSpawn takes nothing returns boolean
+        //debug call Log("[OnceSpawnData-isReadyToSpawn] GetStandardTime()"+R2S(GetStandardTime())+"<"+R2S(fStartTime))
+        if(GetStandardTime() < fStartTime) then
+            return false
+        endif
+        return true
+    endmethod
+    
+    public method StartSpawn takes nothing returns nothing
+        //debug call Log("[OnceSpawnData-StartSpawn]")
+        //스폰하고 메세지 출력
+         if not(udg_nHardLevel < nDifficulty) then
+            call CreateNUnitAtLoc(pPlayer,nUnitTypeId,nNumber,locSpawnLocation, bj_UNIT_FACING)
+            call ShowMsg()
+        endif
+        call this.destroy()
+    endmethod
+    
+    public method isExpired takes nothing returns boolean
+        if(GetStandardTime() < fEndTime) then
+            return false
+        endif
+        return true
+    endmethod
+    
+    public method EndSpawn takes nothing returns nothing
+        set pPlayer = null
+        set locSpawnLocation = null
+        set soundMsg = null
+    endmethod
+    
+    public method SetMessage takes string strMsg, sound soundMsg returns thistype
+        set this.hasMsg = true
+        set this.strMsg = strMsg
+        set this.soundMsg = soundMsg
+        return this
+    endmethod
+    
+    private method ShowMsg takes nothing returns nothing
+        if not(hasMsg) then
+            return
+        endif
+        call ShowWaveAlertAll(strMsg)
+        call PlaySoundBJ(soundMsg)
+    endmethod
+    
+    public method SetDifficulty takes integer level returns thistype
+        set nDifficulty = level
+        return this
+    endmethod
+    
+    public method ForcedSpawn takes nothing returns SpawnData
+        set canForcedSpawn = true
+        return this
+    endmethod
+endstruct
+
+struct LoopSpawnData extends SpawnData
+    public unit uBarrack = null
+    public real fPeriod
+    public timer timerSpawnTimer
+    public boolean isShowMsg
+    
+    public static method create takes player pPlayer, integer nUnitTypeId, integer nNumber, location locSpawnLocation, real fPeriod, real fStartTime, real fEndTime, boolean bShowMsg returns thistype
+            local thistype this = thistype.allocate(  )
+            set this.pPlayer = pPlayer
+            set this.nUnitTypeId = nUnitTypeId
+            set this.nNumber = nNumber
+            set this.locSpawnLocation = locSpawnLocation
+            set this.fStartTime = fStartTime
+            set this.fEndTime = fEndTime
+            set this.isSpawnOnce = false
+            set this.uBarrack= null
+            set this.fPeriod = fPeriod + 0.17
+            set this.timerSpawnTimer = null
+            set this.nDifficulty = 0
+            set this.isShowMsg = bShowMsg
+            set this.canForcedSpawn = false
+            return this
+    endmethod
+     
+    public method onDestroy takes nothing returns nothing
+        //debug call Log("[LoopSpawnData-onDestroy]")
+        call EndSpawn()
+    endmethod
+    
+    public method isReadyToSpawn takes nothing returns boolean
+        //debug call Log("[LoopSpawnData-isReadyToSpawn] GetStandardTime()"+R2S(GetStandardTime())+"<"+R2S(fStartTime))
+        if((GetPlayerId(pPlayer) == 10) and isNightElfFastSpawn) then
+            return true
+        endif
+        if(GetStandardTime() < fStartTime) then
+            return false
+        endif
+        return true
+    endmethod
+    
+    public static method OnSpawn takes nothing returns nothing
+        local LoopSpawnData data = GetTimerData(GetExpiredTimer())
+        local real multipler = 1.5
+        if(GetPlayerId(data.pPlayer) == 10) then
+            set multipler = 1.5
+        endif
+        if (not data.canForcedSpawn and GetPlayerId(data.pPlayer) == 11 and lastUndeadWaveUnitCount >= MaxUnitCounts) then
+            return
+        endif
+        if (GetLivingUnitCount(data.pPlayer, data.nUnitTypeId) >= (data.nNumber*multipler)) then
+            return
+        endif
+        if (udg_nHardLevel < data.nDifficulty) then
+            return
+        endif
+        //debug call Log("[LoopSpawnData-OnSpawn] data" + IntToString(data))
+        call CreateNUnitAtLoc(data.pPlayer,data.nUnitTypeId,data.nNumber,data.locSpawnLocation, bj_UNIT_FACING)
+        set data = NULL
+    endmethod
+    
+    public method StartSpawn takes nothing returns nothing
+        local unit uTemp = null
+        //debug call Log("[LoopSpawnData-StartSpawn]")
+        if not(udg_nHardLevel < nDifficulty) then
+            set uTemp = FirstOfGroup(CreateNUnitAtLoc(pPlayer,nUnitTypeId,nNumber,locSpawnLocation, bj_UNIT_FACING))
+            if isShowMsg then
+                call ShowMsg(GetUnitName(uTemp))
+            endif
+        endif
+        set timerSpawnTimer = NewTimerEx(this)
+        call TimerStart(timerSpawnTimer,fPeriod, true, function thistype.OnSpawn)
+        set uTemp = null
+    endmethod
+    
+    private method ShowMsg takes string strUnitName returns nothing
+        local integer nRandom = GetRandomInt(0,1)
+        if(GetPlayerId(pPlayer) == 11) then
+            if(nRandom == 0) then
+                call ShowWaveAlertAll(ColorForm("저 멀리 어둠속에서 새로운 적의 모습이 보입니다.", Color.WaveNoti)+"\n"+"새로운 언데드 유닛 : "+ strUnitName)
+            elseif(nRandom == 1) then
+                call ShowWaveAlertAll(ColorForm("언데드 군단의 새로운 적이 출전을 준비합니다", Color.WaveNoti)+"\n"+"새로운 언데드 유닛 : "+ strUnitName)
+            endif
+            call PlaySoundBJ(gg_snd_AA_EnemySortie)
+        elseif (GetPlayerId(pPlayer) == 10) then
+            if(nRandom == 0) then
+                call ShowWaveAlertAll(ColorForm("숲속의 햇살아래 새로운 지원군이 모습을 드러냅니다", Color.MainNoti)+"\n"+"새로운 나이트엘프 유닛 : "+ strUnitName)
+            elseif(nRandom == 1) then
+                call ShowWaveAlertAll(ColorForm("나이트엘프 진영의 새로운 지원군이 전투에 합류할 준비를 합니다", Color.MainNoti)+"\n"+"새로운 나이트엘프 유닛 : "+ strUnitName)
+            endif
+            call PlaySoundBJ(gg_snd_AA_Hint)
+        endif
+    endmethod
+    
+    private method hasBarrack takes nothing returns boolean
+        return uBarrack != null
+    endmethod
+    
+    public method isExpired takes nothing returns boolean
+        if(hasBarrack() and (not isUnitAlive(uBarrack))) then
+            return true
+        endif
+        if not(GetStandardTime() < fEndTime) then
+            return true
+        endif
+         if (udg_nHardLevel < nDifficulty) then
+            return true
+        endif
+        return false
+    endmethod
+    
+    public method EndSpawn takes nothing returns nothing
+        call ReleaseTimer(timerSpawnTimer)
+        set uBarrack = null
+        set timerSpawnTimer = null
+        set pPlayer = null
+        set locSpawnLocation = null
+    endmethod
+    
+    public method SetDifficulty takes integer level returns thistype
+        set nDifficulty = level
+        return this
+    endmethod
+    
+    public method ForcedSpawn takes nothing returns SpawnData
+        set canForcedSpawn = true
+        return this
+    endmethod
+endstruct
+
+endlibrary

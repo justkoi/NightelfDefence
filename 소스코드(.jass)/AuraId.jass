@@ -1,0 +1,16 @@
+struct AuraId
+    //public static constant integer None = 'u03C'
+    public static constant integer PhysicalImmun = 'A0EQ'
+    public static constant integer Ironwall = 'A0ES'
+    public static constant integer Chill = 'A06T'
+    public static constant integer CallToArms_Armor = 'A0GR'
+    public static constant integer CallToArms_Attack = 'A0GS'
+    public static constant integer CallToArms_Hp_1 = 'A0GT'
+    public static constant integer CallToArms_Hp_2 = 'A0H2'
+    public static constant integer CallToArms_Hp_3 = 'A0H3'
+    public static constant integer CallToArms_MagicReduce = 'A0H4'
+    public static constant integer Wrath = 'A0GY'
+    public static constant integer Taunt = 'A0HJ'
+    public static constant integer Flare = 'A0IX'
+    public static constant integer ChenQ = 'A0JF'
+endstruct

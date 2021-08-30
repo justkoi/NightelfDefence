@@ -1,0 +1,58 @@
+scope ShieldOfTurbulence initializer Init 
+
+function OnDamageShieldOfTurbulence takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    debug call Log("[OnDamageShieldOfTurbulence]")
+    loop
+        exitwhen not(iter != NULL)
+            if(not isUnitKnockBackImmune(iter.data)) then
+                call PlayMovementToLoc(iter.data,Location(vEffectPos.x,vEffectPos.y),true,70,-20,0.15,false,false,false)
+            endif
+            /*
+            if(not IsUnitMagicImmune(iter.data)) then
+                call AddSpecialEffectTargetUnitBJ( "origin", iter.data, "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" )
+                call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+            endif
+            */
+            set iter = iter.next
+    endloop
+    //call list.Dump()
+endfunction
+
+private function OnSpellStart takes nothing returns nothing
+    local unit uSpecimen = GetTriggerUnit()
+    local EffectData skillEffect = NULL
+    local AttackHit attackHit = NULL
+    local real fDamage = GetUnitMaxHp(uSpecimen) * 0.15
+    call Log("ShieldOfTurbulence : MaxHp(" +R2S(GetUnitMaxHp(uSpecimen))+")")
+    call Log("ShieldOfTurbulence : fDamage(" +R2S(fDamage)+")")
+    set skillEffect = PlayEffectAtUnit(EffectId.Item_ShieldOfTurbulence, uSpecimen, 3.0,0)
+    set attackHit = NewCircleAttackHit(uSpecimen,280,HeroTargetType.All,GroundType.GroundOnly,false,0.1,fDamage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+    call attackHit.AddOnDamage(OnDamageShieldOfTurbulence)
+    call skillEffect.AddAttackHit(attackHit)
+    set uSpecimen = null
+endfunction
+
+
+private function CheckSpellCode takes nothing returns boolean
+    if(GetSpellAbilityId() == 'A0DR') then
+        return true
+    endif
+    return false
+endfunction
+
+private function OnSpellCheck takes nothing returns nothing
+    if ( CheckSpellCode() == false ) then
+        return
+    endif
+    
+    call OnSpellStart()
+endfunction
+
+private function Init takes nothing returns nothing
+    local trigger t = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ(  t, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction(  t, function OnSpellCheck )
+endfunction
+
+endscope

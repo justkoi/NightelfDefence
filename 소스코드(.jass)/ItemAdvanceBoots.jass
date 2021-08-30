@@ -1,0 +1,67 @@
+function Trig_ItemAdvanceBoots_GetSpellCode takes nothing returns boolean
+    if ( not ( GetSpellAbilityId() == 'A0EF' ) ) then
+        return false
+    endif
+    return true
+endfunction
+
+function Trig_ItemAdvanceBoots_Conditions takes nothing returns boolean
+    if ( not Trig_ItemAdvanceBoots_GetSpellCode() ) then
+        return false
+    endif
+    return true
+endfunction
+
+function OnDamageAdvanceBoots takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    debug call Log("[OnDamageAdvanceBoots]")
+    loop
+        exitwhen not(iter != NULL)
+            if(not isUnitKnockBackImmune(iter.data) and not IsUnitType(iter.data, UNIT_TYPE_HERO)) then
+                call PlayMovementToLoc(iter.data,Location(vEffectPos.x,vEffectPos.y),true,100,0,0.15,false,false,false)
+            endif
+            /*
+            if(not IsUnitMagicImmune(iter.data)) then
+                call AddSpecialEffectTargetUnitBJ( "origin", iter.data, "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" )
+                call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+            endif
+            */
+            set iter = iter.next
+    endloop
+    //call list.Dump()
+endfunction
+
+function Trig_ItemAdvanceBoots_Actions takes nothing returns nothing
+    local unit uSpecimen = GetTriggerUnit()
+    local EffectData skillEffect = NULL
+    local AttackHit attackHit = NULL
+    local real fDamage = GetUnitMaxHp(uSpecimen) * 0.010 //1%
+    local integer i = 0
+    local location locTemp = GetSpellTargetLoc()
+    local real fDuration = 5.0
+    if(udg_isReforged) then
+        set fDuration = 0.7
+    endif
+    call PlayMovementToLoc(uSpecimen, locTemp , false, 375, 125, 0.4, true, true,false)
+    loop
+        exitwhen not(i<5)
+            set skillEffect = PlayEffectAtUnit(EffectId.Item_ShieldOfTurbulence, uSpecimen, 5.0, 0.08 * i)
+            call PlayEffectAtUnit(EffectId.ThunderClap, uSpecimen, fDuration, 0.08 * i)
+            set attackHit = NewCircleAttackHit(uSpecimen,240,HeroTargetType.All,GroundType.GroundOnly,false,0.05,fDamage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+            call attackHit.AddOnDamage(OnDamageAdvanceBoots)
+            call skillEffect.AddAttackHit(attackHit)
+            set i = i+1
+    endloop
+    set uSpecimen = null
+    call RemoveLocation(locTemp)
+    set locTemp = null
+endfunction
+
+//===========================================================================
+function InitTrig_ItemAdvanceBoots takes nothing returns nothing
+    set gg_trg_ItemAdvanceBoots = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_ItemAdvanceBoots, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddCondition( gg_trg_ItemAdvanceBoots, Condition( function Trig_ItemAdvanceBoots_Conditions ) )
+    call TriggerAddAction( gg_trg_ItemAdvanceBoots, function Trig_ItemAdvanceBoots_Actions )
+endfunction
+

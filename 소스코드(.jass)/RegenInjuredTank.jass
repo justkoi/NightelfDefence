@@ -1,0 +1,35 @@
+scope RegenInjuredTank initializer Init
+
+globals
+    private integer unitTypeId = 'h01K'
+endglobals
+
+private function Regen takes nothing returns nothing
+    local Injured RedDragon
+    //If Has AnyUnits of PLAYER_NEUTRAL_PASSIVE return
+    
+    if ( CountUnitsInGroup(GetUnitsOfPlayerAndTypeId(Player(PLAYER_NEUTRAL_PASSIVE), unitTypeId)) > 0) then
+        return
+    endif
+    
+    //부상당한 공성대원, 공성대원 소환서
+    set  RedDragon = Injured.create(unitTypeId, 'I05T', GetRandomLocInRect(gg_rct_CampInjured2), 50.0)
+    call RedDragon.AddStartMsg(Color.MainNoti+"공성대원|r : 이런 이런. 더 이상은 무리야. 누가 나를 좀 도와주겠나?\n"+Color.SubNoti+"(공성대원이 치료를 요청합니다.)|r")
+    call RedDragon.AddEndMsg(Color.MainNoti+"공성대원|r : 좋아. 날아갈 것 같구만. 고맙네.\n"+Color.SubNoti+"(그는 아무일 없었다는 듯 걸어서는 천천히 사라졌다.)|r")
+    call RedDragon.AddOnClear(RegenInjuredTank_onInjuredClear)
+    call RedDragon.SetSound(false)
+    
+endfunction
+
+private function Init takes nothing returns nothing
+    local timer t = CreateTimer()
+    call TimerStart(t, 500, true, function Regen)
+    //40
+endfunction
+
+public function onInjuredClear takes unit data returns nothing
+    
+endfunction
+endscope
+
+

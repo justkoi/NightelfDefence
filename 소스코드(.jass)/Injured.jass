@@ -1,0 +1,201 @@
+library Injured needs GameObject, GameObjectManager, EffectManager
+
+struct Injured extends GameObject
+
+public unit uInjured
+public location locSpawn
+
+public UnitList unitList
+
+public integer uInjuredUnitId
+public integer nRewardId
+public string strStartMsg
+public string strEndMsg
+//초당데미지
+public real fDamage
+public real fMinHp
+public boolean useSound = true
+
+public Action_unit onClear
+
+public static constant real radius = 700.0
+
+public static method create takes integer uInjuredUnitId, integer nRewardId, location locSpawn, real fDamage returns thistype
+    local thistype this = thistype.allocate()
+    set this.uInjuredUnitId = uInjuredUnitId
+    set this.nRewardId = nRewardId
+    set this.locSpawn = locSpawn
+    set unitList = unitList.create()
+    set this.fDamage = fDamage
+    call AddGameObject(this)
+    return this
+endmethod
+
+public method Start takes nothing returns nothing
+    set uInjured = CreateUnitAtLoc(Player(PLAYER_NEUTRAL_PASSIVE), uInjuredUnitId, locSpawn, 0)
+    call SetUnitHp(uInjured, GetUnitMaxHp(uInjured) * 0.05)
+    set fMinHp = GetUnitMaxHp(uInjured) * 0.05
+endmethod
+
+//매 업데이트 마다
+public method Update takes real dt returns nothing
+    local UnitList searchList = NULL
+    local unitNode searchedNode = NULL
+    local unit currSearchedUnit = null
+    
+    local unitNode unitListNode = unitList.head
+    local unit currUnitListUnit = null
+    
+    local boolean removed = false
+    local real currDamage = fDamage * dt
+    
+    if(uInjured == null)then
+        call Destroy()
+        return
+    endif
+    
+    if(isUnitDead(uInjured))then
+        call Destroy()
+    //최대체력인가?
+    elseif(isRecovered())then
+        call Clear()
+    endif
+    
+    if(GetUnitHp(uInjured) - currDamage > fMinHp) then
+        call DealUnit(uInjured, currDamage)
+    endif
+    //최대체력이면 = 클리어
+    //유저 전체에 클리어 메세지 전송
+    //아니면 계속
+    
+    
+    set searchList = CreateUnitListInRangeByUnit(uInjured, radius, Filter(function Injured.isPlayerHero))
+    set searchedNode = searchList.head
+    if(searchList != NULL and not searchList.isEmpty()) then
+        loop
+            exitwhen not(searchedNode != NULL)
+                set currSearchedUnit = searchedNode.data
+                if(not isUnitInList(currSearchedUnit))then
+                    call OnUnitEntered(currSearchedUnit)
+                endif
+                //안빼진 경우에만 다음꺼 빼지면 이미 한칸 당겨진경우임
+                set searchedNode = searchedNode.next
+        endloop
+    endif
+    
+    set unitListNode = unitList.head
+    loop
+        exitwhen not(unitListNode != NULL)
+            set currUnitListUnit = unitListNode.data
+            //현재 기존에 있었던 애들로 빼봤는데 안빼지면 기존에 있었지만 현재 빠졌다는것
+            if(searchList.Remove(currUnitListUnit) == null) then
+                call OnUnitExit(currUnitListUnit)
+            endif
+            set unitListNode = unitListNode.next
+    endloop
+    
+    call searchList.destroy()
+    //debug call Log("searchList.Size = " + IntToString(searchList.Size()))
+    
+    
+    
+    //주변에 새로 들어온 영웅이 있는가?
+    //있다면 그 영웅소유 플레이어에게 메세지 전송
+endmethod
+
+private method OnUnitEntered takes unit uTarget returns nothing
+    debug call Log("OnUnitEntered")
+    call ShowNotification(GetOwningPlayer(uTarget), strStartMsg)
+    if(useSound)then
+        call PlaySoundOnUnitBJ( gg_snd_AA_Hint, 100.0, uInjured)
+    endif
+    call unitList.Add(uTarget)
+endmethod
+
+private method OnUnitExit takes unit uTarget returns nothing
+    debug call Log("OnUnitExit")
+   //call ShowNotification(GetOwningPlayer(uTarget), strStartMsg)
+   call unitList.Remove(uTarget)
+endmethod
+
+private method isUnitInList takes unit targetUnit returns boolean
+    local unitNode unitListNode = unitList.head
+    local unit currUnitListUnit = null
+    loop
+        exitwhen not(unitListNode != NULL)
+            set currUnitListUnit = unitListNode.data
+            if(currUnitListUnit == targetUnit) then
+                return true
+            endif
+            set unitListNode = unitListNode.next
+    endloop
+    return false
+endmethod
+
+private static method isPlayerHero takes nothing returns boolean
+     if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+        return false
+     endif
+     if (not IsUnitInForce(GetFilterUnit(), udg_GroupPlayer)) then
+        return false
+     endif
+     return true
+endmethod
+
+//호출 시 파괴됨
+public method Destroy takes nothing returns nothing
+    set isDestroied = true
+endmethod
+
+//파괴되면?
+public method OnDestroy takes nothing returns nothing
+    call RemoveLocation(locSpawn)
+    call RemoveUnit(uInjured)
+    set locSpawn = null
+    set uInjured = null
+    call unitList.destroy()
+endmethod
+
+public method isRecovered takes nothing returns boolean
+    //debug call Log("GetUnitHp(uInjured) >= GetUnitMaxHp(uInjured) " + R2S(GetUnitHp(uInjured)) +">="+R2S(GetUnitMaxHp(uInjured)) )
+    return GetUnitHp(uInjured) >= GetUnitMaxHp(uInjured)
+endmethod
+
+public method Clear takes nothing returns nothing
+    
+    call PlayEffectAtUnit(EffectId.RedDragon_Resurrection, uInjured, 5.0, 0.0).DontFollow()
+    //call PlayEffectAtUnit(EffectId.RedDragon_Bomb, uInjured, 5.0, 1.0).DontFollow()
+    
+    call ShowNotificationAll(strEndMsg)
+    
+    call CreateItemLoc(nRewardId, locSpawn)
+    
+    if(onClear != NULL)then
+        call onClear.execute(uInjured)
+    endif
+    
+    call Destroy()
+endmethod
+
+public method AddStartMsg takes string msg returns thistype
+    set this.strStartMsg = msg
+    return this
+endmethod
+
+public method AddEndMsg takes string msg returns thistype
+    set this.strEndMsg = msg
+    return this
+endmethod
+
+public method AddOnClear takes Action_unit onClear returns nothing
+    set this.onClear = onClear
+endmethod
+
+public method SetSound takes boolean enable returns nothing
+    set useSound = enable
+endmethod
+
+endstruct
+
+
+endlibrary

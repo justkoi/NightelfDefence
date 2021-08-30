@@ -1,0 +1,115 @@
+library MovementManager requires MovementData, LinkedList
+
+globals
+    private BaseMovementDataList movementList = NULL
+    public constant real fUpdatePeriod = 0.03
+    public group unitGroup = CreateGroup() //영향을 받고있는 중인 유닛
+endglobals
+
+private function Update takes nothing returns nothing
+    local BaseMovementDataNode iter = movementList.head
+    local BaseMovementData data = NULL
+    local integer i = 0
+    //if(movementList.Size() > 0) then
+    //    call FLog("[movementList.Size()1] " + I2S(movementList.Size()))
+    //debug call Log("[Start] Count = " +I2S(movementList.Count))
+    loop
+        exitwhen not(iter != NULL)
+            set data = iter.data
+            //debug call Log("[Loop] ["+I2S(i)+"] data : " + I2S(iter.data))
+            if(data.isExpired()) then
+                call data.destroy()
+                set iter = movementList.RemoveNode(iter)
+            else
+                call data.Play(fUpdatePeriod)
+                if(data.isExpired()) then
+                    //debug call Log("[Destroy] curr data : " + I2S(iter.data))
+                    call data.destroy()
+                    set iter = movementList.RemoveNode(iter)
+                    //debug call Log("[Destroy] next data : " + I2S(iter.data))
+                else
+                    set iter = iter.next
+                    set i = i+1
+                endif
+            endif
+    endloop
+    //endif
+    //if(movementList.Size() > 0) then
+    //    call FLog("[movementList.Size()2] " + I2S(movementList.Size()))
+    //endif
+endfunction
+
+
+public function isUnitInGroup takes unit uTarget returns boolean
+    return IsUnitInGroup(uTarget, unitGroup)
+endfunction
+
+function PlayMovement takes unit uTargetUnit, real fAngle, real fDistance, real fAcceleration, real fTime, boolean isControllable, boolean isPassable, boolean isUnique returns MovementData
+    local MovementData data = NULL
+    //debug call Log("[MovementManager-Play] uTargetUnit:"+GetUnitName(uTargetUnit))
+    
+    if(isUnitInGroup(uTargetUnit)) then
+        return NULL
+    endif
+    
+    set data = MovementData.create(uTargetUnit,fAngle,fDistance,fTime,fAcceleration, isControllable, isPassable)
+    if(isUnique) then
+        call data.SetUnique()
+    endif
+    call data.OnPlayStart()
+    call movementList.Add(data)
+    //debug call Log("[MovementManager-Play] movementList.Count:"+IntToString(movementList.Count))
+    return data
+endfunction
+
+//MovementManager_PlayTo(A,B,100.f,100.0f,0.5f)
+//uTargetUnit 을 uFacingUnit을 향한 방향으로 Play
+function PlayMovementToUnit takes unit uTargetUnit, unit uFacingUnit, boolean isReverseAngle, real fDistance, real fAcceleration, real fTime, boolean isControllable, boolean isPassable, boolean isUnique returns MovementData
+  local location locA = GetUnitLoc(uTargetUnit)
+  local location locB = GetUnitLoc(uFacingUnit)
+  local real fAngle = AngleBetweenPoints(locA,locB)
+  if(isReverseAngle) then
+    if(fAngle <= 180.0) then
+        set fAngle = fAngle + 180
+    else
+        set fAngle = fAngle - 180
+    endif
+  endif
+  
+  call RemoveLocation(locA)
+  call RemoveLocation(locB)
+  set locA = null
+  set locB = null
+  return PlayMovement(uTargetUnit,fAngle,fDistance,fAcceleration,fTime,isControllable, isPassable, isUnique)
+endfunction
+
+function PlayMovementToLoc takes unit uTargetUnit, location locB, boolean isReverseAngle, real fDistance, real fAcceleration, real fTime, boolean isControllable, boolean isPassable, boolean isUnique returns MovementData
+  local location locA = GetUnitLoc(uTargetUnit)
+  local real fAngle = AngleBetweenPoints(locA,locB)
+  if(isReverseAngle) then
+    if(fAngle <= 180.0) then
+        set fAngle = fAngle + 180
+    else
+        set fAngle = fAngle - 180
+    endif
+  endif
+  call RemoveLocation(locA)
+  call RemoveLocation(locB)
+  set locA = null
+  return PlayMovement(uTargetUnit,fAngle,fDistance,fAcceleration,fTime,isControllable, isPassable, isUnique)
+endfunction
+
+private function Init takes nothing returns nothing
+    local timer timerUpdate = CreateTimer()
+    debug call Log("MovementManager")
+    set movementList = BaseMovementDataList.create()
+    call TimerStart(timerUpdate,fUpdatePeriod,true, function Update)
+endfunction
+
+function InitTrig_MovementManager takes nothing returns nothing
+    local trigger t = CreateTrigger(  )
+    call TriggerRegisterTimerEventSingle( t, 1.01 )
+    call TriggerAddAction( t, function Init )
+endfunction
+
+endlibrary

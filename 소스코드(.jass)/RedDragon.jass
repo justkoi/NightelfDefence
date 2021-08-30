@@ -1,0 +1,18 @@
+function Trig_RedDragon_Actions takes nothing returns nothing
+    local Injured RedDragon = Injured.create('n050', 'I05R', GetRandomLocInRect(gg_rct_Barbarian2), 300.0)
+    call RedDragon.AddStartMsg(Color.MainNoti+"레드드래곤 플라그란스|r : 용사여 나를 좀 도와주지 않겠나? 정처없이 떠돌던중 커다란 폭풍에 휩쓸려 그만 큰 부상을 입고 말았네.\n"+Color.SubNoti+"(플라그란스가 치료를 요청합니다.)|r")
+    call RedDragon.AddEndMsg(Color.MainNoti+"레드드래곤 플라그란스|r : 도와주어서 고맙네. 도움이 필요하면 언제든지 나를 부르게.\n"+Color.SubNoti+"(플라그란스는 홀연히 사라졌다.)|r")
+    call RedDragon.AddOnClear(onRedDragonClear)
+endfunction
+
+function onRedDragonClear takes unit data returns nothing
+    call PlaySoundBJ( gg_snd_DragonYes2 )
+endfunction
+// integer uInjuredUnitId, item itemReward, location locSpawn returns thistype
+//===========================================================================
+function InitTrig_RedDragon takes nothing returns nothing
+    set gg_trg_RedDragon = CreateTrigger(  )
+    call TriggerRegisterTimerEventSingle( gg_trg_RedDragon, 5 )
+    call TriggerAddAction( gg_trg_RedDragon, function Trig_RedDragon_Actions )
+endfunction
+

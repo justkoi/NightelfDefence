@@ -1,0 +1,454 @@
+library AttackHit requires Extensions
+
+interface AttackHit
+    public player pAttackerPlayer
+    public boolean hasCollider
+    public real fColliderRadius
+    public boolean canHitWhenAttackerDead
+    //공격자
+    public unit uAttacker
+    ///데미지 이벤트
+    public OnDamage onDamage
+    ///아머타입
+    public attacktype eAttackType
+    ///데미지 타입
+    public damagetype eDamageType
+    ///데미지
+    public real fDamage
+    ///타이머
+    public real fTimer
+    ///시간
+    public real fTime
+    ///영웅 혹은 비영웅 대상인가?
+    public HeroTargetType eHeroTargetType
+    ///지상 혹은 공중 대상인가?
+    public GroundType eGroundType
+    ///건물 공격가능한가?
+    public boolean CanTargetStructure
+    ///이 공격을 재생합니다. (목표 시간까지 재생한 후 DoHit합니다.)
+    public method Play takes real dt, Vector3 vPos returns boolean
+    ///공격을 발현할 순간인가?
+    public method CanDoHit takes Vector3 vPos returns boolean
+    ///이 공격을 발현합니다.
+    public method DoHit takes Vector3 vPos returns nothing
+    //만료되었는가?
+    public method isExpired takes nothing returns boolean
+    
+    public method AddOnDamage takes OnDamage onDamage returns nothing
+   
+    public method AddCollider takes integer fRadius returns nothing
+    
+    public method CanHitWhenAttackerDead takes nothing returns AttackHit
+endinterface
+
+function NewCircleAttackHit takes unit uAttacker, real fRadius, HeroTargetType eHeroTargetType, GroundType eGroundType, boolean CanTargetStructure , real fTime, real fDamage, attacktype eAttackType, damagetype eDamageType returns AttackHit
+    return CircleAttackHit.create(uAttacker,fRadius,eHeroTargetType,eGroundType,CanTargetStructure,fTime,fDamage,eAttackType,eDamageType)
+endfunction
+
+struct CircleAttackHit extends AttackHit
+    ///원의 반지름
+    public real fRadius
+    //'공격자'가 'x반지름' 원안의 모든 적대적대상에게 'x초'후 'x의 피해'를 a아머타입 b데미지타입으로 입힙니다.
+    public static method create takes unit uAttacker, real fRadius, HeroTargetType eHeroTargetType, GroundType eGroundType, boolean CanTargetStructure , real fTime, real fDamage, attacktype eAttackType, damagetype eDamageType returns thistype
+        local thistype this = thistype.allocate()
+        set this.uAttacker = uAttacker
+        set this.pAttackerPlayer = GetOwningPlayer(uAttacker)
+        set this.fRadius = fRadius
+        set this.eHeroTargetType = eHeroTargetType
+        set this.eGroundType = eGroundType
+        set this.CanTargetStructure = CanTargetStructure
+        set this.fTimer = 0
+        set this.fTime = fTime
+        set this.fDamage = fDamage
+        set this.eAttackType = eAttackType
+        set this.eDamageType = eDamageType
+        set this.hasCollider = false
+        set this.fColliderRadius = 0
+        set this.onDamage = NULL
+        set this.canHitWhenAttackerDead = false
+        return this
+    endmethod
+    ///returns booleans isDoHited
+    public method Play takes real dt, Vector3 vPos returns boolean
+        set fTimer = fTimer + dt
+        call Log("HL1")
+        if (CanDoHit(vPos)) then
+            call Log("HL3")
+            call DoHit(vPos)
+            return true
+        endif
+        return false
+    endmethod
+
+    static thistype filter
+    static method isTargetUnit takes nothing returns boolean
+        if( not ( IsUnitEnemy(GetFilterUnit(), filter.pAttackerPlayer)) == true ) then
+                call Log("HF1")
+                return false
+        endif
+        if(not filter.CanTargetStructure) then
+            if (IsUnitType(GetFilterUnit(), UNIT_TYPE_STRUCTURE)) then
+                call Log("HF2")
+                return false
+            endif
+        endif
+        
+        if(filter.eHeroTargetType == HeroTargetType.HeroOnly) then
+            if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+                call Log("HF3")
+                return false
+            endif
+        elseif(filter.eHeroTargetType == HeroTargetType.NonHeroOnly) then
+            if (IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+                call Log("HF4")
+                return false
+            endif
+        endif
+        
+        if(filter.eGroundType == GroundType.GroundOnly) then
+            if (IsUnitType(GetFilterUnit(), UNIT_TYPE_FLYING)) then
+                call Log("HF5")
+                return false
+            endif
+        elseif(filter.eGroundType == GroundType.FlyingOnly) then
+            if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_FLYING)) then
+                call Log("HF6")
+                return false
+            endif
+        endif
+        
+        if(filter.canHitWhenAttackerDead) then
+            call Log("canHitWhenAttackerDead = true")
+        else
+            call Log("canHitWhenAttackerDead = false")
+        endif
+        if((not filter.canHitWhenAttackerDead) and isUnitDead(GetFilterUnit())) then
+            call Log("HF7")
+            return false
+        endif
+        return true
+    endmethod
+
+    public method CanDoHit takes Vector3 vPos returns boolean
+        local boolean passedHitTest = false
+        local UnitList unitList
+        call Log("HL2-1")
+        if(hasCollider) then
+            set CircleAttackHit.filter = this
+            set unitList = CreateUnitListInRange(vPos, fColliderRadius, Filter(function CircleAttackHit.isTargetUnit))
+            set passedHitTest = not unitList.isEmpty()
+            call unitList.Clear()
+            call unitList.destroy()
+            set CircleAttackHit.filter = NULL
+        endif
+        call Log("HL2-2")
+        return (fTimer >= fTime) or passedHitTest
+    endmethod
+
+    private method DoHit takes Vector3 vPos returns nothing
+        local unitNode iter = NULL
+        local UnitList unitList = NULL
+        call Log("HL4-1")
+        set CircleAttackHit.filter = this
+        set unitList = CreateUnitListInRange(vPos, fRadius, Filter(function CircleAttackHit.isTargetUnit))
+        set iter = unitList.head
+        loop
+            exitwhen not (iter != NULL)
+                call UnitDamageTarget(uAttacker,iter.data,fDamage,false,false,eAttackType,eDamageType,null)
+                set iter = iter.next
+        endloop
+        if(onDamage != NULL and not unitList.isEmpty()) then
+            call onDamage.execute(vPos, unitList)
+        endif
+        call unitList.destroy()
+        set CircleAttackHit.filter = NULL
+        call Log("HL4-2")
+    endmethod
+
+    public method isExpired takes nothing returns boolean
+        return (not canHitWhenAttackerDead) and isUnitDead(uAttacker)
+    endmethod
+
+    private method onDestroy takes nothing returns nothing
+        set uAttacker = null
+        set pAttackerPlayer = null
+        set onDamage = NULL
+    endmethod
+    
+    public method AddOnDamage takes OnDamage onDamage returns nothing
+        set this.onDamage = onDamage
+    endmethod
+    
+    public method AddCollider takes integer fRadius returns nothing
+        set hasCollider = true
+        set fColliderRadius = fRadius
+    endmethod
+    
+    public method CanHitWhenAttackerDead takes nothing returns AttackHit
+        set this.canHitWhenAttackerDead = true
+        return this
+    endmethod
+endstruct
+
+
+function NewDonutAttackHit takes unit uAttacker, real fOutsideRadius, real fInsideRaduis, HeroTargetType eHeroTargetType, GroundType eGroundType, boolean CanTargetStructure , real fTime, real fDamage, attacktype eAttackType, damagetype eDamageType returns AttackHit
+    return DonutAttackHit.create(uAttacker,fOutsideRadius,fInsideRaduis,eHeroTargetType,eGroundType,CanTargetStructure,fTime,fDamage,eAttackType,eDamageType)
+endfunction
+
+struct DonutAttackHit extends AttackHit
+    ///원의 반지름
+    public real fOutsideRadius
+    public real fInsideRaduis
+    //'공격자'가 'x반지름' 원거리 도넛안의 모든 적대적대상에게 'x초'후 'x의 피해'를 a아머타입 b데미지타입으로 입힙니다.
+    public static method create takes unit uAttacker, real fOutsideRadius, real fInsideRaduis, HeroTargetType eHeroTargetType, GroundType eGroundType, boolean CanTargetStructure , real fTime, real fDamage, attacktype eAttackType, damagetype eDamageType returns thistype
+        local thistype this = thistype.allocate()
+        set this.uAttacker = uAttacker
+        set this.pAttackerPlayer = GetOwningPlayer(uAttacker)
+        set this.fOutsideRadius = fOutsideRadius
+        set this.fInsideRaduis = fInsideRaduis
+        set this.eHeroTargetType = eHeroTargetType
+        set this.eGroundType = eGroundType
+        set this.CanTargetStructure = CanTargetStructure
+        set this.fTimer = 0
+        set this.fTime = fTime
+        set this.fDamage = fDamage
+        set this.eAttackType = eAttackType
+        set this.eDamageType = eDamageType
+        set this.hasCollider = false
+        set this.fColliderRadius = 0
+        set this.onDamage = NULL
+        set this.canHitWhenAttackerDead = false
+        debug call Log("[Donut Create!]")
+        return this
+    endmethod
+    ///returns booleans isDoHited
+    public method Play takes real dt, Vector3 vPos returns boolean
+        set fTimer = fTimer + dt
+        if (CanDoHit(vPos)) then
+            call DoHit(vPos)
+            return true
+        endif
+        return false
+    endmethod
+
+    static thistype filter
+    static method isTargetUnit takes nothing returns boolean
+        if( not ( IsUnitEnemy(GetFilterUnit(), filter.pAttackerPlayer)) == true ) then
+                return false
+        endif
+        if(not filter.CanTargetStructure) then
+            if (IsUnitType(GetFilterUnit(), UNIT_TYPE_STRUCTURE)) then
+                return false
+            endif
+        endif
+        if(filter.eHeroTargetType == HeroTargetType.HeroOnly) then
+            if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+                return false
+            endif
+        elseif(filter.eHeroTargetType == HeroTargetType.NonHeroOnly) then
+            if (IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+                return false
+            endif
+        endif
+
+        if(filter.eGroundType == GroundType.GroundOnly) then
+            if (IsUnitType(GetFilterUnit(), UNIT_TYPE_FLYING)) then
+                call Log("HF5")
+                return false
+            endif
+        elseif(filter.eGroundType == GroundType.FlyingOnly) then
+            if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_FLYING)) then
+                call Log("HF6")
+                return false
+            endif
+        endif
+        
+        if((not filter.canHitWhenAttackerDead) and isUnitDead(GetFilterUnit())) then
+            call Log("HF7")
+            return false
+        endif
+        return true
+    endmethod
+
+    public method CanDoHit takes Vector3 vPos returns boolean
+        local boolean passedHitTest = false
+        local UnitList unitList
+        if(hasCollider) then
+            set DonutAttackHit.filter = this
+            set unitList = CreateUnitListInRange(vPos, fColliderRadius, Filter(function DonutAttackHit.isTargetUnit))
+            set passedHitTest = not unitList.isEmpty()
+            call unitList.Clear()
+            call unitList.destroy()
+            set DonutAttackHit.filter = NULL
+        endif
+        debug call Log("[Donut CanDoHit!]" + R2S(fTimer) + " >= "+ R2S(fTime))
+        return (fTimer >= fTime) or passedHitTest
+    endmethod
+
+    private method DoHit takes Vector3 vPos returns nothing
+        local unitNode iter = NULL
+        local UnitList unitList = NULL
+        debug call Log("Donut DoHit!")
+        set DonutAttackHit.filter = this
+        debug call Log("Donut DoHit2!")
+        set unitList = CreateUnitListInDonutRange(vPos, fOutsideRadius, fInsideRaduis, Filter(function DonutAttackHit.isTargetUnit))
+        debug call Log("Donut DoHit3!")
+        set iter = unitList.head
+        loop
+            exitwhen not (iter != NULL)
+                call UnitDamageTarget(uAttacker,iter.data,fDamage,false,false,eAttackType,eDamageType,null)
+                set iter = iter.next
+        endloop
+        if(onDamage != NULL) then
+            call onDamage.execute(vPos, unitList)
+        endif
+        call unitList.destroy()
+        set DonutAttackHit.filter = NULL
+    endmethod
+
+    public method isExpired takes nothing returns boolean
+        return (not canHitWhenAttackerDead) and isUnitDead(uAttacker)
+    endmethod
+
+    private method onDestroy takes nothing returns nothing
+        set uAttacker = null
+        set pAttackerPlayer = null
+        set onDamage = NULL
+    endmethod
+    
+    public method AddOnDamage takes OnDamage onDamage returns nothing
+        set this.onDamage = onDamage
+    endmethod
+    
+    public method AddCollider takes integer fRadius returns nothing
+        set hasCollider = true
+        set fColliderRadius = fRadius
+    endmethod
+    
+    public method CanHitWhenAttackerDead takes nothing returns AttackHit
+        set this.canHitWhenAttackerDead = true
+        return this
+    endmethod
+endstruct
+
+/*
+struct CircleHealHit extends AttackHit
+ ///원의 반지름
+    public real fRadius
+    //'공격자'가 'x반지름' 원안의 모든 적대적대상에게 'x초'후 'x의 피해'를 a아머타입 b데미지타입으로 입힙니다.
+    public static method create takes unit uAttacker, real fRadius, HeroTargetType eHeroTargetType, GroundType eGroundType, boolean CanTargetStructure , real fTime, real fDamage, attacktype eAttackType, damagetype eDamageType returns thistype
+        local thistype this = thistype.allocate()
+        set this.uAttacker = uAttacker
+        set this.pAttackerPlayer = GetOwningPlayer(uAttacker)
+        set this.fRadius = fRadius
+        set this.eHeroTargetType = eHeroTargetType
+        set this.eGroundType = eGroundType
+        set this.CanTargetStructure = CanTargetStructure
+        set this.fTimer = 0
+        set this.fTime = fTime
+        set this.fDamage = fDamage
+        set this.eAttackType = eAttackType
+        set this.eDamageType = eDamageType
+        set this.hasCollider = false
+        set this.fColliderRadius = 0
+        set this.onDamage = NULL
+        return this
+    endmethod
+    ///returns booleans isDoHited
+    public method Play takes real dt, Vector3 vPos returns boolean
+        set fTimer = fTimer + dt
+        if (CanDoHit(vPos)) then
+            call DoHit(vPos)
+            return true
+        endif
+        return false
+    endmethod
+
+    static thistype filter
+    static method isTargetUnit takes nothing returns boolean
+        if( not ( IsUnitEnemy(GetFilterUnit(), filter.pAttackerPlayer)) == true ) then
+                return false
+        endif
+        if(not filter.CanTargetStructure) then
+            if (IsUnitType(GetFilterUnit(), UNIT_TYPE_STRUCTURE)) then
+                return false
+            endif
+        endif
+        if(filter.eHeroTargetType == HeroTargetType.HeroOnly) then
+            if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+                return false
+            endif
+        elseif(filter.eHeroTargetType == HeroTargetType.NonHeroOnly) then
+            if (IsUnitType(GetFilterUnit(), UNIT_TYPE_HERO)) then
+                return false
+            endif
+        endif
+
+        if(filter.eGroundType == GroundType.GroundOnly) then
+            if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_GROUND)) then
+                return false
+            endif
+        elseif(filter.eGroundType == GroundType.FlyingOnly) then
+            if (not IsUnitType(GetFilterUnit(), UNIT_TYPE_FLYING)) then
+                return false
+            endif
+        endif
+        if(isUnitDead(GetFilterUnit())) then
+            return false
+        endif
+        return true
+    endmethod
+
+    public method CanDoHit takes Vector3 vPos returns boolean
+        local boolean passedHitTest = false
+        local UnitList unitList
+        if(hasCollider) then
+            set CircleAttackHit.filter = this
+            set unitList = CreateUnitListInRange(vPos, fColliderRadius, Filter(function CircleAttackHit.isTargetUnit))
+            set passedHitTest = not unitList.isEmpty()
+            call unitList.Clear()
+            call unitList.destroy()
+            set CircleAttackHit.filter = NULL
+        endif
+        return (fTimer >= fTime) or passedHitTest
+    endmethod
+
+    private method DoHit takes Vector3 vPos returns nothing
+        local unitNode iter = NULL
+        local UnitList unitList = NULL
+        set CircleAttackHit.filter = this
+        set unitList = CreateUnitListInRange(vPos, fRadius, Filter(function CircleAttackHit.isTargetUnit))
+        set iter = unitList.head
+        loop
+            exitwhen not (iter != NULL)
+                call UnitDamageTarget(uAttacker,iter.data,fDamage,false,false,eAttackType,eDamageType,null)
+                set iter = iter.next
+        endloop
+        if(onDamage != NULL) then
+            call onDamage.execute(vPos, unitList)
+        endif
+        call unitList.destroy()
+        set CircleAttackHit.filter = NULL
+    endmethod
+
+    public method isExpired takes nothing returns boolean
+        return isUnitDead(uAttacker)
+    endmethod
+
+    private method onDestroy takes nothing returns nothing
+        set uAttacker = null
+        set pAttackerPlayer = null
+        set onDamage = NULL
+    endmethod
+    
+    public method AddOnDamage takes OnDamage onDamage returns nothing
+        set this.onDamage = onDamage
+    endmethod
+    
+    public method AddCollider takes integer fRadius returns nothing
+        set hasCollider = true
+        set fColliderRadius = fRadius
+    endmethod
+endstruct
+*/
+endlibrary

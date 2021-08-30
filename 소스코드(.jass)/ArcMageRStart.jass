@@ -1,0 +1,93 @@
+library ArcmageMysticDoor requires MysticDoor
+
+globals
+    private constant real fDuration = 25.0
+endglobals
+
+function Trig_ArcMageRStart_Func002C takes nothing returns boolean
+    if ( not ( GetSpellAbilityId() == 'A008' ) ) then
+        return false
+    endif
+    if ( not ( DistanceBetweenPoints(GetUnitLoc(GetTriggerUnit()), GetSpellTargetLoc()) >= 800.00 ) ) then
+        call IssueImmediateOrderBJ( GetTriggerUnit(), "stop" )
+        call DisplayTimedTextToForce( GetForceOfPlayer(GetOwningPlayer(GetTriggerUnit())), 3.00, "TRIGSTR_624" )
+        call MysticDoorReject(GetOwningPlayer(GetTriggerUnit()))
+        return false
+    endif
+    return true
+endfunction
+
+function Trig_ArcMageRStart_Conditions takes nothing returns boolean
+    if ( not Trig_ArcMageRStart_Func002C() ) then
+        return false
+    endif
+    return true
+endfunction
+
+function Trig_ArcMageRStart_Actions takes nothing returns nothing
+    local unit uTemp = GetTriggerUnit()
+    local location locUnit =  GetUnitLoc(uTemp)
+    local location locTarget = GetSpellTargetLoc()
+    local location locStartAt = PolarProjectionBJ(locUnit,130,AngleBetweenPoints(locUnit,locTarget))
+    local location locEndAt = PolarProjectionBJ(locTarget,130,AngleBetweenPoints(locUnit,locTarget))
+    local player pPlayer = GetOwningPlayer(uTemp)
+    
+    call SaveMysticDoor(pPlayer, locStartAt, locEndAt)
+    //debug call Log("[SaveMysticDoor] Location("+R2S(GetLocationX(locStartAt))+","+R2S(GetLocationY(locStartAt))+")")
+    
+    call RemoveLocation(locUnit)
+    call RemoveLocation(locTarget)
+    set pPlayer = null
+    set locUnit = null
+    set locTarget = null
+endfunction
+
+function MysticDoorStopCondition takes nothing returns boolean
+    local unit uTemp = GetTriggerUnit()
+    local player pPlayer = GetOwningPlayer(uTemp)
+    
+    if( not isMysticDoorPassed(pPlayer) ) then
+        set pPlayer= null
+        set uTemp = null
+        return false
+    endif
+    if ( not ( GetSpellAbilityId() == 'A008' ) ) then
+        set pPlayer= null
+        set uTemp = null
+        return false
+    endif
+    
+    set pPlayer= null
+    set uTemp = null
+    return true
+endfunction
+
+function MysticDoorStopAction takes nothing returns nothing
+    local unit uTemp = GetTriggerUnit()
+    local player pPlayer = GetOwningPlayer(uTemp)
+    local location locTeleport = null
+    set locTeleport = CreateMysticDoor(pPlayer, fDuration).locStartToEnd
+    call UnitMoveToLoc(uTemp, locTeleport)
+    //debug call Log("CreateMysticDoor")
+    
+    set locTeleport = null
+    set pPlayer= null
+    set uTemp = null
+endfunction
+
+//===========================================================================
+function InitTrig_ArcMageRStart takes nothing returns nothing
+    local trigger stopTrigger = CreateTrigger(  )
+    set gg_trg_ArcMageRStart = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_ArcMageRStart, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddCondition( gg_trg_ArcMageRStart, Condition( function Trig_ArcMageRStart_Conditions ) )
+    call TriggerAddAction( gg_trg_ArcMageRStart, function Trig_ArcMageRStart_Actions )
+    
+    set stopTrigger = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ( stopTrigger, EVENT_PLAYER_UNIT_SPELL_FINISH )
+    call TriggerAddCondition( stopTrigger, Condition( function MysticDoorStopCondition ) )
+    call TriggerAddAction( stopTrigger, function MysticDoorStopAction )
+    
+endfunction
+
+endlibrary

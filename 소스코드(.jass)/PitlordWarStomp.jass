@@ -1,0 +1,214 @@
+scope PitlordWarStomp
+
+globals
+    private real fDelayTime = 2.0
+endglobals
+
+private function OnRangeBomb takes EffectData data returns nothing
+    call PlayEffectAtPos(EffectId.PitLord_RangeBomb_Blast,data.CreateEffectPos(),1.0,0)
+endfunction
+    
+private function OnNearBomb takes EffectData data returns nothing
+    local location locTemp = GetUnitLoc(data.uEffect)
+    call PlaySoundAtPointBJ( gg_snd_Incinerate1, 100.0,locTemp,0)
+    call RemoveLocation(locTemp)
+    set locTemp = null
+    //call PlaySoundOnUnitBJ( gg_snd_ClawSlash_Impact_1, 85.00, GetTriggerUnit() )
+endfunction
+    
+
+private function OnDamage takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    debug call Log("[PitlordWarStomp-OnDamage]")
+    loop
+        exitwhen not(iter != NULL)
+            if(not isUnitKnockBackImmune(iter.data)) then
+                call PlayMovementToLoc(iter.data,Location(vEffectPos.x,vEffectPos.y),true,60,-20,0.15,true,false,false)
+            endif
+            //call AddSpecialEffectTargetUnitBJ( "origin", iter.data, "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" )
+            //call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+            set iter = iter.next
+    endloop
+    //call list.Dump()
+endfunction
+
+
+struct PitlordWarStomp extends AISpell
+    public static AISpell filterSpell = NULL
+    public static method create takes real fCooldownTimeBase, unit uOwner returns thistype
+        local thistype this = thistype.allocate()
+        set this.fCooldownTimer = fCooldownTimeBase
+        set this.fCooldownTimeBase = fCooldownTimeBase
+        set this.fCooldownTime = fCooldownTimeBase
+        set this.uOwner = uOwner
+        set this.isSpelling = false
+        set this.fMpCost = 50
+        return this
+    endmethod
+    
+    public method Play takes real dt returns nothing
+        if(isCooldown()) then
+            set fCooldownTimer = fCooldownTimer + dt
+        endif
+        if(CanUseSpell()) then
+            call StartSpell()
+        endif
+    endmethod
+
+    public method isCooldown takes nothing returns boolean
+        return (fCooldownTimer < fCooldownTime)
+    endmethod
+    
+    public static method isTargetUnit takes nothing returns boolean
+        if(not IsUnitEnemy(GetFilterUnit(),GetOwningPlayer(filterSpell.uOwner))) then
+            return false
+        endif
+        if(not IsUnitType(GetFilterUnit(),UNIT_TYPE_HERO)) then
+            return false
+        endif
+        if(isUnitDead(GetFilterUnit())) then
+            return false
+        endif
+        return true
+    endmethod
+    
+    public method hasCost takes nothing returns boolean
+        return GetUnitMp(uOwner) > fMpCost
+    endmethod
+    
+    public method UseCost takes nothing returns nothing
+        call SetUnitMp(uOwner, GetUnitMp(uOwner) - fMpCost)
+    endmethod
+    
+    public method CanUseSpell takes nothing returns boolean
+        local UnitList list = NULL
+        local Vector3 vPos = NULL
+        local boolean targetDetected = false
+        if(isCooldown()) then
+            return false
+        endif
+    
+        if(isSpelling) then
+            return false
+        endif
+
+        if(not hasCost()) then
+            return false
+        endif
+        
+        set filterSpell = this
+        set list = CreateUnitListInRangeByUnit(uOwner, 800, Filter(function PitlordWarStomp.isTargetUnit))
+        
+        set targetDetected = not list.isEmpty()
+        
+        call list.destroy()
+        
+        return targetDetected
+    endmethod
+    
+    
+    public method StartSpell takes nothing returns nothing
+        local timer spellingTimer = NewTimerEx(this)
+        local boolean isRangeBomb = GetRandomInt(0,2) != 0
+        local EffectData effectBomb = NULL
+        local EffectData effectSafe = NULL
+        local EffectData effectBombBlast = NULL
+        local AttackHit attackHitRange = NULL
+        local real fDamage = 0
+        local real effectSpeed = 1.0
+        
+        
+        
+        if (udg_nHardLevel < Difficulty.Hard) then
+            set fDamage = 1200
+            set fDelayTime = 3.0
+            set effectSpeed = 0.66
+        elseif (udg_nHardLevel == Difficulty.Hard) then
+            set fDamage = 1900
+            set fDelayTime = 2.7
+            set effectSpeed = 0.9
+        elseif (udg_nHardLevel == Difficulty.VeryHard) then
+            set fDamage = 2527
+            set fDelayTime = 2.5
+            set effectSpeed = 0.9
+        elseif (udg_nHardLevel == Difficulty.Hell) then
+            set fDamage = 3134
+            set fDelayTime = 2.2
+            set effectSpeed = 0.9
+        elseif (udg_nHardLevel == Difficulty.Deity) then
+            set fDamage = 3742
+            set fDelayTime = 2.2
+            set effectSpeed = 0.9
+        elseif (udg_nHardLevel >= Difficulty.Nightmare) then
+            set fDamage = 4642
+            set fDelayTime = 2.2
+            set effectSpeed = 0.9
+        endif
+        
+        debug call Log("[PitlordWarStomp-StartSpell] uOwner :" + I2S(GetHandleId(uOwner)) + " Name: " + GetUnitName(uOwner))
+        call UseCost()
+        set isSpelling = true
+        
+        if(isRangeBomb) then
+            set effectSafe = PlayEffectAtUnit(EffectId.PitLord_RangeBomb_Green,uOwner,fDelayTime,0)
+            set effectBomb = PlayEffectAtUnit(EffectId.PitLord_RangeBomb_Red,uOwner,fDelayTime,0)
+            call effectBomb.SetOnEffectEnd(OnRangeBomb)
+            call effectSafe.SetSpeed(effectSpeed).SetAnimation("stand")
+            call effectBomb.SetSpeed(effectSpeed).SetAnimation("stand")
+            
+            set attackHitRange = NewDonutAttackHit(uOwner,1200,450,HeroTargetType.All,GroundType.GroundOnly,false,fDelayTime,fDamage,ATTACK_TYPE_NORMAL, DAMAGE_TYPE_MAGIC)
+            call attackHitRange.AddOnDamage(OnDamage)
+            call effectBomb.AddAttackHit(attackHitRange) 
+        else
+            set effectSafe = PlayEffectAtUnit(EffectId.PitLord_NearBomb_Green,uOwner,fDelayTime,0)
+            set effectBomb = PlayEffectAtUnit(EffectId.PitLord_NearBomb_Red,uOwner,fDelayTime,0)
+            set effectBombBlast = PlayEffectAtUnit(EffectId.PitLord_NearBomb_Blast,uOwner,5,fDelayTime-1.5)
+            call effectBomb.SetOnEffectEnd(OnNearBomb)
+            //call effectBomb.SetOnEffectEnd(OnRangeBomb)
+            call effectSafe.SetSpeed(effectSpeed).SetAnimation("stand")
+            call effectBomb.SetSpeed(effectSpeed).SetAnimation("stand")
+            
+            set attackHitRange = NewCircleAttackHit(uOwner,500,HeroTargetType.All,GroundType.GroundOnly,false,fDelayTime,fDamage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+            call attackHitRange.AddOnDamage(OnDamage)
+            call effectBomb.AddAttackHit(attackHitRange) 
+        endif
+        call UnitAddAbility(uOwner, 'A0D7')
+        call IssueImmediateOrder(uOwner,"channel")
+        call SetUnitTimeScale(uOwner, 0.66)
+        
+        call TimerStart(spellingTimer, fDelayTime, false, function thistype.OnSpellEnd)
+        set spellingTimer = null
+    endmethod
+    
+    public static method OnSpellEnd takes nothing returns nothing
+         local PitlordWarStomp data = GetTimerData(GetExpiredTimer())
+         call data.EndSpell()
+         call ReleaseTimer(GetExpiredTimer())
+    endmethod
+    
+    public method EndSpell takes nothing returns nothing
+        set isSpelling = false
+        call UnitRemoveAbility(uOwner, 'A0D7')
+        call SetUnitTimeScale(uOwner, 1.0)
+        call ResetCooldown()
+    endmethod
+    
+    public method ResetCooldown takes nothing returns nothing
+        set fCooldownTimer = fCooldownTimer - fCooldownTime
+        //-1~+1초 랜덤
+        set fCooldownTime = fCooldownTimeBase + (GetRandomReal(0,2) - 1) 
+    endmethod
+    
+    public method isExpired takes nothing returns boolean
+        if(isUnitDead(uOwner)) then
+            return true
+        endif
+        return false
+    endmethod
+    
+    public method onDestroy takes nothing returns nothing
+        set uOwner = null
+    endmethod
+endstruct
+
+endscope

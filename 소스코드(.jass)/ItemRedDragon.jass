@@ -1,0 +1,44 @@
+scope ItemRedDragon initializer Init 
+
+globals
+    private integer RedDragonUnitTypeId = 'n04Z'
+    private FairyUnit RedDragon
+endglobals
+
+private function OnSpellStart takes nothing returns nothing
+    local unit uSpecimen = GetTriggerUnit()
+    local location locUnit = GetUnitLoc(uSpecimen)
+    local unit uDragon = null
+    set uDragon = CreateUnitAtLoc(playerNightElf,RedDragonUnitTypeId,locUnit,0.0)
+    call UnitApplyTimedLife( uDragon, 'Broa', 1800 )
+    call ShowNotificationAll(Color.MainNoti+"레드드래곤 플라그란스|r : 내 도움이 필요한가? 얼마든지.\n"+Color.SubNoti+"(플라그란스의 소환시간은 30분 입니다.)|r")
+    call PlaySoundBJ( gg_snd_DragonYes2 )
+    set RedDragon = FairyUnit.create(uDragon, uSpecimen, 900, 300, playerNightElf, playerNightElf, udg_locNightElfHeroRegen,false,false)
+    call PlaySpell(RedDragon)
+    set uSpecimen = null
+    set locUnit = null
+endfunction
+
+
+private function CheckSpellCode takes nothing returns boolean
+    if(GetSpellAbilityId() == 'A0DZ') then
+        return true
+    endif
+    return false
+endfunction
+
+private function OnSpellCheck takes nothing returns nothing
+    if ( CheckSpellCode() == false ) then
+        return
+    endif
+    
+    call OnSpellStart()
+endfunction
+
+private function Init takes nothing returns nothing
+    local trigger t = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ(  t, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction(  t, function OnSpellCheck )
+endfunction
+
+endscope

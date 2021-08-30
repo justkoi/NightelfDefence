@@ -1,0 +1,176 @@
+/*
+interface AISpell
+    public real fCooldownTimer
+    public real fCooldownTimeBase
+    public real fCooldownTime
+    public real fMpCost
+    public unit uOwner
+    ///스펠이 동작중인지 여부를 스펠링으로 명명
+    public boolean isSpelling
+    //사용조건에 여러가지가 있을수있음.
+    //일단 생성자에서 타이머 CanUseSkillCheck타이머를 돌려서 원안의 적대적 대상을 확인하던지 해야함
+    public method Play takes real dt returns nothing
+    public method hasCost takes nothing returns boolean
+    public method UseCost takes nothing returns nothing
+    public method isCooldown  takes nothing returns boolean
+    public method CanUseSpell takes nothing returns boolean
+    public method StartSpell takes nothing returns nothing
+    public method EndSpell takes nothing returns nothing
+    public method ResetCooldown takes nothing returns nothing
+    public method isExpired takes nothing returns boolean
+endinterface
+*/
+
+scope StarRain
+
+
+private function OnDamage takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    loop
+        exitwhen not(iter != NULL)
+            if(not isUnitKnockBackImmune(iter.data)) then
+                call PlayMovementToLoc(iter.data,Location(vEffectPos.x,vEffectPos.y),true,80,-40,0.2,true,false,false)
+            endif
+            set iter = iter.next
+    endloop
+    //call list.Dump()
+endfunction
+
+struct StarRain extends AISpell
+    public static AISpell filterSpell = NULL
+    public unit targetUnit = null
+    public real fDamage = 0
+    public static method create takes real fDamage, real fCooldownTime, real fMpCost, unit uOwner returns thistype
+        local thistype this = thistype.allocate()
+        set this.fCooldownTimer = 0
+        set this.fCooldownTimeBase = fCooldownTime
+        set this.fCooldownTime = fCooldownTime
+        set this.fMpCost = fMpCost
+        set this.uOwner = uOwner
+        set this.fDamage = fDamage
+        return this
+    endmethod
+
+    public method Play takes real dt returns nothing
+        if(isCooldown()) then
+            set fCooldownTimer = fCooldownTimer + dt
+        endif
+        if(CanUseSpell()) then
+            call StartSpell()
+        endif
+    endmethod
+
+    public method StartSpell takes nothing returns nothing
+        local integer i = 0
+        local Vector3 vPos = NULL
+        local EffectData data = NULL
+        local AttackHit attackHit = NULL
+        set isSpelling = true
+        loop
+            exitwhen not (i<20)
+                set vPos = CreateRandomPosByUnit(targetUnit, 500)
+                set data = PlayEffectAtPos(EffectId.StarRain_Main, vPos.Copy(),1.8,0.5+(0.1*i)+0.8).RotateTo(0)
+                set attackHit = NewCircleAttackHit(uOwner,200,HeroTargetType.All,GroundType.All,false,0.8,fDamage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                call attackHit.AddOnDamage(OnDamage)
+                call data.AddAttackHit(attackHit)
+                call vPos.destroy()
+                set i = i+1
+        endloop
+        call PlayTalk()
+        call EndSpell()
+    endmethod
+    
+    public method PlayTalk takes nothing returns nothing
+        call QuestMessageBJ( udg_GroupPlayer, bj_QUESTMESSAGE_ITEMACQUIRED, "|cff3CFBFF세나리우스|r: 누구도 이 땅을 해할 수 없다!" )
+        call PlaySoundBJ( gg_snd_KeeperOfTheGroveYesAttack3 )
+    endmethod
+
+    public static method OnSpellEnd takes nothing returns nothing
+         local StarRain data = GetTimerData(GetExpiredTimer())
+         call data.EndSpell()
+         call ReleaseTimer(GetExpiredTimer())
+    endmethod
+
+    public method EndSpell takes nothing returns nothing
+        set isSpelling = false
+        call ResetCooldown()
+    endmethod
+
+    public method isExpired takes nothing returns boolean
+        if(isUnitDead(uOwner)) then
+            return true
+        endif
+        return false
+    endmethod
+
+    public method isCooldown takes nothing returns boolean
+        return (fCooldownTimer < fCooldownTime)
+    endmethod
+
+    public method hasCost takes nothing returns boolean
+        return GetUnitMp(uOwner) > fMpCost
+    endmethod
+    
+    public method UseCost takes nothing returns nothing
+        call SetUnitMp(uOwner, GetUnitMp(uOwner) - fMpCost)
+    endmethod
+    
+    public method ResetCooldown takes nothing returns nothing
+        set fCooldownTimer = fCooldownTimer - fCooldownTime
+        //-1~+1초 랜덤
+        set fCooldownTime = fCooldownTimeBase + (GetRandomReal(0,2) - 1) 
+    endmethod
+    
+    public method onDestroy takes nothing returns nothing
+        set uOwner = null
+        set targetUnit = null
+    endmethod
+
+    public static method isTargetUnit takes nothing returns boolean
+        if(not IsUnitEnemy(GetFilterUnit(),GetOwningPlayer(filterSpell.uOwner))) then
+            return false
+        endif
+        if(IsUnitType(GetFilterUnit(),UNIT_TYPE_HERO)) then
+            return false
+        endif
+        if(IsUnitType(GetFilterUnit(),UNIT_TYPE_STRUCTURE)) then
+            return false
+        endif
+        if(isUnitDead(GetFilterUnit())) then
+            return false
+        endif
+        return true
+    endmethod
+
+    public method CanUseSpell takes nothing returns boolean
+        local UnitList list = NULL
+        local Vector3 vPos = NULL
+        local boolean targetDetected = false
+        set targetUnit = null
+        if(isCooldown()) then
+            return false
+        endif
+    
+        if(isSpelling) then
+            return false
+        endif
+
+        if(not hasCost()) then
+            return false
+        endif
+        
+        set filterSpell = this
+        set list = CreateUnitListInRangeByUnit(uOwner, 800, Filter(function StarRain.isTargetUnit))
+        
+        set targetDetected = not list.isEmpty()
+        if(targetDetected) then
+            set targetUnit = list.RemoveFirst()
+            debug call Log("TargetUnit :" + GetUnitName(targetUnit))
+        endif
+        call list.destroy()
+        
+        return targetDetected
+    endmethod
+endstruct
+
+endscope

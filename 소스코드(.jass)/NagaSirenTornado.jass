@@ -1,0 +1,468 @@
+library NagaSirenTornado needs EffectManager
+
+globals
+    private real fEffectTime = 2.0
+    private real fSpellingTime = fEffectTime + 3.4
+    unit g_uSairen = null
+    location g_locLastEffectTornado = null
+endglobals
+
+function OnDamageRichTornado takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    local real distance = 0
+    local real additional = 0
+    local location locEffect
+    local location locSairen
+    local location locTarget
+    local location locVictim
+    local real angle = 0
+    
+    //debug call Log("[OnDamageRichSkill4]")
+    if(g_uSairen == null) then
+        return
+    endif
+    
+    if(isUnitDead(g_uSairen)) then
+        return
+    endif
+    
+    set locEffect = Location(vEffectPos.x,vEffectPos.y)
+    if(g_locLastEffectTornado != null) then
+        set locSairen = Location(GetLocationX(g_locLastEffectTornado),GetLocationY(g_locLastEffectTornado))
+    else
+        set locSairen = GetUnitLoc(g_uSairen)
+    endif
+    set angle = AngleBetweenPoints(locSairen, locEffect)
+    set locTarget = PolarProjectionBJ(locEffect,-200,angle)
+    //누수제거
+    
+    loop
+        exitwhen not(iter != NULL)
+           // set distance = DistanceBetweenUnits(iter.data, g_uSairen)
+           // set additional = 0
+           // if(distance < 200) then
+            //    set additional = 200
+           // endif
+           //     set distance = GetRemainder(distance, 200)
+           //     debug call Log("[PN]Distance = " + R2S(distance))
+          //      set distance = (distance + 10) + additional
+                set locVictim = GetUnitLoc(iter.data)
+                set distance = DistanceBetweenPoints(locVictim,locTarget)
+                //debug call Log("[1]Distance = " + R2S(distance))
+                if(not isUnitKnockBackImmune(iter.data)) then
+                    call PlayMovementToLoc(iter.data,CopyLoc(locSairen),false,distance*0.7,distance*0.3,0.3,false,false,true)
+                endif
+                
+                if(not IsUnitMagicImmune(iter.data)) then
+                    call AddSpecialEffectTargetUnitBJ( "origin", iter.data, "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" )
+                    call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+                endif
+                
+                call RemoveLocation(locVictim)
+                set locVictim = null
+            //endif
+            set iter = iter.next
+    endloop
+    
+    call RemoveLocation(locEffect)
+    call RemoveLocation(locSairen)
+    call RemoveLocation(locTarget)
+    set locEffect = null
+    set locSairen = null
+    set locTarget = null
+    
+endfunction
+
+function OnDamageRichTornado2 takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    local real distance = 0
+    local real additional = 0
+    local location locEffect
+    local location locSairen
+    local location locTarget
+    local location locVictim
+    local real angle = 0
+    
+    //debug call Log("[OnDamageRichSkill4]")
+    if(g_uSairen == null) then
+        return
+    endif
+    
+    if(isUnitDead(g_uSairen)) then
+        return
+    endif
+    
+    set locEffect = Location(vEffectPos.x,vEffectPos.y)
+    if(g_locLastEffectTornado != null) then
+        set locSairen = Location(GetLocationX(g_locLastEffectTornado),GetLocationY(g_locLastEffectTornado))
+    else
+        set locSairen = GetUnitLoc(g_uSairen)
+    endif
+    set angle = AngleBetweenPoints(locSairen, locEffect)
+    set locTarget = PolarProjectionBJ(locEffect,200,angle)
+    //누수제거
+    
+    loop
+        exitwhen not(iter != NULL)
+           // set distance = DistanceBetweenUnits(iter.data, g_uSairen)
+           // set additional = 0
+           // if(distance < 200) then
+            //    set additional = 200
+           // endif
+           //     set distance = GetRemainder(distance, 200)
+           //     debug call Log("[PN]Distance = " + R2S(distance))
+          //      set distance = (distance + 10) + additional
+                set locVictim = GetUnitLoc(iter.data)
+                set distance = DistanceBetweenPoints(locVictim,locTarget)
+                //debug call Log("[2]Distance = " + R2S(distance))
+                if(not isUnitKnockBackImmune(iter.data)) then
+                    call PlayMovementToLoc(iter.data,CopyLoc(locSairen),true,distance*0.7,distance*0.3,0.3,false,false,true)
+                endif
+                
+                if(not IsUnitMagicImmune(iter.data)) then
+                    call AddSpecialEffectTargetUnitBJ( "origin", iter.data, "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" )
+                    call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+                endif
+                
+                call RemoveLocation(locVictim)
+                set locVictim = null
+            //endif
+            set iter = iter.next
+    endloop
+    
+    call RemoveLocation(locEffect)
+    call RemoveLocation(locSairen)
+    call RemoveLocation(locTarget)
+    set locEffect = null
+    set locSairen = null
+    set locTarget = null
+    
+    //call list.Dump()
+endfunction
+
+
+struct NagaSirenTornado extends AISpell
+    public real damage
+    public static AISpell filterSpell = NULL
+    public static method create takes real fCooldownTimeBase, unit uOwner, real damage returns thistype
+        local thistype this = thistype.allocate()
+        set this.fCooldownTimer = fCooldownTimeBase
+        set this.fCooldownTimeBase = fCooldownTimeBase
+        set this.fCooldownTime = fCooldownTimeBase
+        set this.uOwner = uOwner
+        set this.isSpelling = false
+        set this.fMpCost = 50
+        set this.damage = damage
+        return this
+    endmethod
+    
+    public method Play takes real dt returns nothing
+        if(isCooldown()) then
+            set fCooldownTimer = fCooldownTimer + dt
+        endif
+        if(CanUseSpell()) then
+            call StartSpell()
+            call AISpellManager_AddSpellUnit(uOwner)
+        endif
+    endmethod
+
+    public method isCooldown takes nothing returns boolean
+        return (fCooldownTimer < fCooldownTime)
+    endmethod
+    
+    public static method isTargetUnit takes nothing returns boolean
+        if(not IsUnitEnemy(GetFilterUnit(),GetOwningPlayer(filterSpell.uOwner))) then
+            return false
+        endif
+        if(IsUnitType(GetFilterUnit(),UNIT_TYPE_STRUCTURE)) then
+            return false
+        endif
+        if(not IsUnitType(GetFilterUnit(),UNIT_TYPE_GROUND)) then
+            return false
+        endif
+        if(isUnitDead(GetFilterUnit())) then
+            return false
+        endif
+        return true
+    endmethod
+    
+    public method hasCost takes nothing returns boolean
+        return GetUnitMp(uOwner) > fMpCost
+    endmethod
+    
+    public method UseCost takes nothing returns nothing
+        call SetUnitMp(uOwner, GetUnitMp(uOwner) - fMpCost)
+    endmethod
+    
+    public method CanUseSpell takes nothing returns boolean
+        local UnitList list = NULL
+        local Vector3 vPos = NULL
+        local boolean targetDetected = false
+        if(isCooldown()) then
+            return false
+        endif
+    
+        if(isSpelling) then
+            return false
+        endif
+
+        if(not hasCost()) then
+            return false
+        endif
+        
+        if(AISpellManager_isUnitSpelling(uOwner)) then
+            return false
+        endif
+         
+        set filterSpell = this
+        set list = CreateUnitListInRangeByUnit(uOwner, 800, Filter(function NagaSirenTornado.isTargetUnit))
+        
+        set targetDetected = not list.isEmpty()
+        
+        call list.destroy()
+        
+        return targetDetected
+    endmethod
+    
+    
+    public method StartSpell takes nothing returns nothing
+        local timer spellingTimer = NewTimerEx(this)
+        local timer effectTimer = NewTimerEx(this)
+          
+          
+        
+        if(GetUnitTypeId(uOwner) == 'H00X') then
+            call IssueImmediateOrder(uOwner,"channel")
+            call DisplayTimedTextToForce( udg_GroupPlayer, udg_fBossDisplayTime, "|cff3CFBFF레이디 바쉬|r: 휩쓸려라!" )
+            call PlaySoundBJ( gg_snd_LadyVashjYes3 )//NagaSirenYesAttack1
+        else
+            call IssueImmediateOrder(uOwner,"channel")
+            call DisplayTimedTextToForce( udg_GroupPlayer, udg_fBossDisplayTime, "|cff3CFBFF일리샤르|r: 전부 휩쓸려라!" )
+            call PlaySoundBJ( gg_snd_NagaSirenYes3 )//NagaSirenYesAttack1
+        endif
+        call UseCost()
+        set isSpelling = true
+
+        
+        set g_uSairen = uOwner
+        
+        
+        //set udg_nSkillBossLevel[3] = 0
+        //set udg_bChanalingSkillBoss[3] = true
+        //보스 대사
+        //call DisplayTimedTextToForce( udg_GroupPlayer, udg_fBossDisplayTime, "|cff3CFBFF일리샤르|r: 널 위한 선물이다." )
+        //보스 대사 (음성)
+        //call PlaySoundBJ( gg_snd_HeroLichYesAttack3 )
+        //set udg_uSkill_Boss[3] = GetTriggerUnit()
+        //set udg_locTemp = GetUnitLoc(GetTriggerUnit())
+        //call GroupEnumUnitsInRangeOfLoc( udg_Skill_Boss[3], udg_locTemp, 1500.00, Condition(function Trig_SkillUseRich4_Func007004) )
+        //call ForGroupBJ( udg_Skill_Boss[3], function Trig_SkillUseRich4_Func008A )
+        //call RemoveLocation( udg_locTemp )
+        //call StartTimerBJ( udg_TimerSkillBoss[3], false, 0.80 )
+        
+        
+        call TimerStart(effectTimer, fEffectTime, false, function thistype.OnSpellEffect)
+        call TimerStart(spellingTimer, fSpellingTime, false, function thistype.OnSpellEnd)
+        set spellingTimer = null
+        set effectTimer = null
+    endmethod
+    
+    public static method GetRingNumber takes real fDistance returns integer
+        local real ringPerRadius = 3
+        return R2I((fDistance/200.0)*ringPerRadius+ringPerRadius)
+    endmethod
+    
+    public static method OnSpellEffect takes nothing returns nothing
+        local NagaSirenTornado skillData = GetTimerData(GetExpiredTimer())
+        local integer nRand = GetRandomInt(0,1)
+        local integer i = 0
+        local EffectData data = NULL
+        local AttackHit attackHit = NULL
+        local Vector3 vPos = NULL
+        local unit uSairen = skillData.uOwner
+        local location locSairen = GetUnitLoc(uSairen)
+        local real fDistance = 1000
+        local real fAngle = 0
+        local location locTemp = null
+        local integer level = 0
+        local real fTickTime = 0.5
+        local integer number = 20
+        local real damage = skillData.damage
+        local real damageDecrease = damage * 0.11
+        
+        set g_locLastEffectTornado = locSairen
+        if(nRand == 0) then //원 -> 근
+            loop
+                exitwhen not (i<number)
+                    set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uSairen,200,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnDamageRichTornado)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                    set i = i+1
+            endloop
+            
+            set i = 0
+            set fDistance = fDistance - 200
+            set level = level + 1
+            set number = GetRingNumber(fDistance)
+            set damage = damage - damageDecrease
+            loop
+                exitwhen not (i<number)
+                    set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uSairen,200,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnDamageRichTornado)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                    set i = i+1
+            endloop
+            
+            
+            set i = 0
+            set fDistance = fDistance - 200
+            set level = level + 1
+            set number = GetRingNumber(fDistance)
+            set damage = damage - damageDecrease
+            loop
+                exitwhen not (i<number)
+                    set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uSairen,200,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnDamageRichTornado)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                    set i = i+1
+            endloop
+            
+            set i = 0
+            set fDistance = fDistance - 200
+            set level = level + 1
+            set number = GetRingNumber(fDistance)
+            set damage = damage - damageDecrease
+            loop
+                exitwhen not (i<number)
+                    set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uSairen,200,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnDamageRichTornado)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                    set i = i+1
+            endloop
+        else
+            set fDistance = 200
+            set number = 6
+            loop
+                exitwhen not (i<number)
+                    set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uSairen,200,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnDamageRichTornado2)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                    set i = i+1
+            endloop
+            
+            set i = 0
+            set fDistance = fDistance + 200
+            set level = level + 1
+            set number = GetRingNumber(fDistance)
+            set damage = damage - damageDecrease
+            loop
+                exitwhen not (i<number)
+                    set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uSairen,200,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnDamageRichTornado2)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                    set i = i+1
+            endloop
+            
+            
+            set i = 0
+            set fDistance = fDistance + 200
+            set level = level + 1
+            set number = GetRingNumber(fDistance)
+            set damage = damage - damageDecrease
+            loop
+                exitwhen not (i<number)
+                    set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uSairen,200,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnDamageRichTornado2)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                    set i = i+1
+            endloop
+            
+            set i = 0
+            set fDistance = fDistance + 200
+            set level = level + 1
+            set number = GetRingNumber(fDistance)
+            set damage = damage - damageDecrease
+            loop
+                exitwhen not (i<number)
+                    set locTemp =  PolarProjectionBJ(locSairen,fDistance,fAngle+ ((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5+((fTickTime/number)*i)).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Naga_WaterBlast, vPos.Copy(),1.2,(level*fTickTime)+0.5+((fTickTime/number)*i)+0.9).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uSairen,200,HeroTargetType.All,GroundType.GroundOnly,false,0.0,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnDamageRichTornado2)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                    set i = i+1
+            endloop
+        endif
+    endmethod
+    
+    public static method OnSpellEnd takes nothing returns nothing
+         local NagaSirenTornado data = GetTimerData(GetExpiredTimer())
+         call data.EndSpell()
+         call AISpellManager_RemoveSpellUnit(data.uOwner)
+         if(g_locLastEffectTornado != null) then
+            call RemoveLocation(g_locLastEffectTornado)
+         endif
+         call ReleaseTimer(GetExpiredTimer())
+    endmethod
+    
+    public method EndSpell takes nothing returns nothing
+        set isSpelling = false
+        call ResetCooldown()
+    endmethod
+    
+    public method ResetCooldown takes nothing returns nothing
+        set fCooldownTimer = fCooldownTimer - fCooldownTime
+        //-1~+1초 랜덤
+        set fCooldownTime = fCooldownTimeBase + (GetRandomReal(0,2) - 1) 
+    endmethod
+    
+    public method isExpired takes nothing returns boolean
+        if(isUnitDead(uOwner)) then
+            return true
+        endif
+        return false
+    endmethod
+    
+    public method onDestroy takes nothing returns nothing
+        set uOwner = null
+    endmethod
+endstruct
+
+endlibrary

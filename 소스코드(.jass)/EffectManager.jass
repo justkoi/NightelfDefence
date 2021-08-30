@@ -1,0 +1,64 @@
+library EffectManager initializer Init requires EffectData
+
+globals
+    public EffectDataList effectDataList
+    private timer updateTimer
+    private constant real fUpdatePeriod = 0.04
+endglobals
+
+//just loop O(N) not O(N^2)
+private function Update takes nothing returns nothing
+    local EffectDataNode iter = effectDataList.head
+    local EffectData data = NULL
+    loop
+        exitwhen not(iter != NULL)
+            set data = iter.data
+            ///지연된 Stopped 처리에 의해 필요합니다.
+            if(data.isExpired()) then
+                call data.destroy()
+                set iter = effectDataList.RemoveNode(iter)
+            else
+                call data.Play(fUpdatePeriod)
+                ///플레이후에 Timer에 의해 필요합니다.
+                if(data.isExpired()) then
+                    call data.destroy()
+                    set iter = effectDataList.RemoveNode(iter)
+                else
+                    set iter = iter.next
+                endif
+            endif
+    endloop
+endfunction
+
+private function Play takes EffectData effectData returns nothing
+    call effectDataList.Add(effectData)
+    //debug call Log("effectDataList.Count="+I2S(effectDataList.Count))
+endfunction
+
+function PlayEffectAtPos takes integer nEffectId, Vector3 vPos, real fTime, real fDelay returns EffectData
+    local EffectData tempEffectData = PosEffectData.create(nEffectId,vPos,fTime,fDelay)
+    //debug call Log("[PlayEffectAtLoc] Called!")
+    call Play(tempEffectData)
+    return tempEffectData
+endfunction
+
+function PlayEffectAtLocation takes integer nEffectId, location locPoint, real fTime, real fDelay returns EffectData
+    local Vector3 newPos = Vector3.create(0,0,0).PosFromLocation(locPoint)
+    return PlayEffectAtPos(nEffectId,newPos,fTime,fDelay)
+endfunction
+
+
+function PlayEffectAtUnit takes integer nEffectId, unit uTarget, real fTime, real fDelay returns EffectData
+    local EffectData tempEffectData = UnitEffectData.create(nEffectId,uTarget,fTime,fDelay)
+    call Play(tempEffectData)
+    return tempEffectData
+endfunction
+
+
+private function Init takes nothing returns nothing
+    set effectDataList = EffectDataList.create()
+    set updateTimer = CreateTimer()
+    call TimerStart(updateTimer,fUpdatePeriod,true,function Update)
+endfunction
+
+endlibrary

@@ -1,0 +1,17 @@
+library GameObject
+
+interface GameObject
+
+public boolean isDestroied = false
+//시작 시
+public method Start takes nothing returns nothing
+//매 업데이트 마다
+public method Update takes real dt returns nothing
+//호출 시 파괴됨
+public method Destroy takes nothing returns nothing
+//파괴되면?
+public method OnDestroy takes nothing returns nothing
+
+endinterface
+
+endlibrary

@@ -1,0 +1,121 @@
+library AuraData needs String
+
+struct AuraData
+    public unit uTarget
+    
+    public integer nAuraId
+    private integer nLevel
+    private real fTime
+    private real fDelayedTime
+    private real fTimer
+    private real fDelayedTimer
+    private boolean isStopped
+   // private Action_unit onAuraStart
+   // private Action_unit onAuraEnd
+    ///대상 유닛에게 x오라를 y초동안 z의 딜레이 후에 부여합니다.
+    public static method create takes unit uTarget, integer nAuraId, integer nLevel, real fTime, real fDelay, boolean dependAbility returns thistype
+        local thistype this = thistype.allocate()
+        set this.uTarget = uTarget
+        set this.nAuraId = nAuraId
+        set this.nLevel = nLevel
+        set this.fTime = fTime
+        set this.fDelayedTime = fDelay
+        set this.fTimer = 0
+        set this.fDelayedTimer = 0
+        set this.isStopped = false
+        if(fDelayedTime < 0.0001) then
+            call this.StartPlay()
+        endif
+        if(not dependAbility) then //ability 의존형이 아니면 3.5초뺴서 버프 사라지는 딜레이 고려해줌.
+            set this.fTime = fTime - 3.5
+        endif
+        if(fTime <= 0) then
+            set fTime = 0.1
+        endif
+        return this
+    endmethod
+    
+    private method StartPlay takes nothing returns nothing
+        call Start()
+    endmethod
+    
+    private method Start takes nothing returns nothing
+        //call FLog("Started")
+        if(uTarget == null) then
+            call this.Stop()
+            return
+        endif
+        call UnitAddAbility(uTarget, nAuraId)
+        call SetUnitAbilityLevel(uTarget,nAuraId,nLevel)
+        call OnStart()
+    endmethod
+    
+    private method isDelaying takes nothing returns boolean
+        return (fDelayedTimer < fDelayedTime)
+    endmethod
+
+    public method Play takes real dt returns nothing
+        if(isDelaying()) then
+            set fDelayedTimer = fDelayedTimer + dt
+            if(not isDelaying()) then
+                set fTimer = fTimer + (fDelayedTimer - fDelayedTime)
+                call StartPlay()
+            else
+                return
+            endif
+        else
+            set fTimer = fTimer + dt
+        endif
+    endmethod
+    
+    public method Refresh takes integer nLevel, real fRefreshTime returns thistype
+        call SetUnitAbilityLevel(uTarget,nAuraId,nLevel)
+        set fTime = fRefreshTime
+        set fTimer = 0
+        return this
+    endmethod
+
+    public method Stop takes nothing returns nothing
+        set isStopped = true
+    endmethod
+
+    public method isExpired takes nothing returns boolean
+        //debug call Log("[isExpired] " +R2S(fTimer) + R2S(fTime))
+        if (fTimer > fTime) then
+            return true
+        endif
+        if(isStopped) then
+            return true
+        endif
+        return false
+    endmethod
+
+    public method OnStart takes nothing returns nothing
+        //if(onAuraStart != NULL) then
+       //     call onAuraStart.execute(this)
+       // endif
+    endmethod
+
+    private method OnEnd takes nothing returns nothing
+        if(uTarget != null) then
+            call UnitRemoveAbility(uTarget, nAuraId)
+        endif
+        //call FLog("OnEnd")
+        //if(onAuraEnd != NULL) then
+        //    call onAuraEnd.execute(this)
+       // endif
+        set uTarget = null
+    endmethod
+    
+    method onDestroy takes nothing returns nothing
+        call OnEnd()
+       // if(onEffectStart != NULL) then
+       //     set onEffectStart = NULL
+       // endif
+       // if(onEffectEnd != NULL) then
+      //      set onEffectEnd = NULL
+      //  endif
+    endmethod
+endstruct
+
+endlibrary

@@ -1,0 +1,106 @@
+library BuildingLimit initializer Init needs Plant
+
+globals
+    private hashtable BuildingLimitTable = null
+    private trigger trg_destroyingBuild = null
+endglobals
+
+native GetUnitGoldCost takes integer id returns integer
+
+private function isInTable takes nothing returns boolean
+    local integer nMax = LoadInteger(BuildingLimitTable, GetUnitTypeId(GetTriggerUnit()), 0)
+    if ( nMax >= 1 ) then
+        return true
+    endif
+    return false
+endfunction
+
+private function Action takes nothing returns nothing
+    local integer nId = GetUnitTypeId(GetTriggerUnit())
+    local integer nLimit = LoadInteger(BuildingLimitTable, nId, 0)
+    //local integer nCost = LoadInteger(BuildingLimitTable, nId, 1)
+    local integer nUseable = LoadInteger(BuildingLimitTable, nId, 2)
+    
+     if(nUseable < nLimit) then
+        call SaveInteger(BuildingLimitTable,nId,2,nUseable+1)
+        //call FLog("[건설수] 현재 건설된 "+GetUnitName(GetTriggerUnit())+" 수 : "+I2S(LoadInteger(BuildingLimitTable, nId, 2)))
+        //call FLog("[건설수] 현재 건설된 타운홀 수 : "+I2S(LoadInteger(BuildingLimitTable, 'h01Y', 2)))
+     else
+        call ShowNotification( GetOwningPlayer(GetTriggerUnit()), "[건설] "+GetUnitName(GetTriggerUnit())+"은(는) "+I2S(nLimit)+"개만 건설 가능합니다.\n사용한 골드는 전액 반환되었습니다.")
+        call AdjustPlayerStateBJ( GetUnitGoldCost(nId), GetOwningPlayer(GetTriggerUnit()), PLAYER_STATE_RESOURCE_GOLD )
+        call DisableTrigger(trg_destroyingBuild)
+        call KillUnit(GetTriggerUnit())
+        call EnableTrigger(trg_destroyingBuild)
+     endif
+    
+    
+endfunction
+
+private function AddLimitTable takes integer buildingId, integer nLimit returns nothing
+    call SaveInteger(BuildingLimitTable,buildingId,0,nLimit)
+    //call SaveInteger(BuildingLimitTable,buildingId,1,nCost)
+    call SaveInteger(BuildingLimitTable,buildingId,2,0)//0 useable
+endfunction
+
+private function isBuilding takes nothing returns boolean
+    return IsUnitType(GetTriggerUnit(),UNIT_TYPE_STRUCTURE)
+endfunction
+
+private function Action2 takes nothing returns nothing
+    local integer nId = GetUnitTypeId(GetTriggerUnit())
+    local integer nLimit = LoadInteger(BuildingLimitTable, nId, 0)
+    local integer nUseable = LoadInteger(BuildingLimitTable, nId, 2)
+    
+    //call ShowNotification( GetOwningPlayer(GetTriggerUnit()), "[파괴] "+GetUnitName(GetTriggerUnit())+"은(는) 파괴됨. "+I2S(nUseable))
+        
+    if(nLimit >= 1) then
+        call SaveInteger(BuildingLimitTable,nId,2,nUseable-1)
+        //call FLog("[건설수] 현재 건설된 "+GetUnitName(GetTriggerUnit())+" 수 : "+I2S(LoadInteger(BuildingLimitTable, nId, 2)))
+    endif
+    
+    //Town Hall, City Office, Keep, Castle ..
+    if(nId == 'h021') then
+        call SaveInteger(BuildingLimitTable,'h01Y',2,LoadInteger(BuildingLimitTable, 'h01Y', 2)-1)
+    endif
+    
+    if(nId == 'h01Z') then
+        call SaveInteger(BuildingLimitTable,'h01Y',2,LoadInteger(BuildingLimitTable, 'h01Y', 2)-1)
+    endif
+    
+    if(nId == 'h020') then
+        call SaveInteger(BuildingLimitTable,'h01Y',2,LoadInteger(BuildingLimitTable, 'h01Y', 2)-1)
+    endif
+    
+    // Advanced Moon well -> Moon well
+    if(nId == 'e00N') then
+        call SaveInteger(BuildingLimitTable,'emow',2,LoadInteger(BuildingLimitTable, 'emow', 2)-1)
+    endif
+    
+endfunction
+
+//===========================================================================
+private function Init takes nothing returns nothing
+    set trg_destroyingBuild = CreateTrigger()
+    set gg_trg_BuildingLimit = CreateTrigger(  )
+    
+    call TriggerRegisterAnyUnitEventBJ( gg_trg_BuildingLimit, EVENT_PLAYER_UNIT_CONSTRUCT_START )
+    call TriggerAddCondition( gg_trg_BuildingLimit, Condition( function isInTable ) )
+    call TriggerAddAction( gg_trg_BuildingLimit, function Action )
+    
+    call TriggerRegisterAnyUnitEventBJ( trg_destroyingBuild, EVENT_PLAYER_UNIT_DEATH )
+    call TriggerAddCondition( gg_trg_BuildingLimit, Condition( function isBuilding ) )
+    call TriggerAddAction( trg_destroyingBuild, function Action2 )
+    
+    set BuildingLimitTable = InitHashtable()
+    call AddLimitTable('h01V', 1) //
+    call AddLimitTable('h01Y', 1) //
+    call AddLimitTable('h022', 1) //
+    call AddLimitTable('h023', 1) //
+    call AddLimitTable('h025', 1) //
+    call AddLimitTable('h01X', 12) // Guard Tower (farmer)
+    call AddLimitTable('emow', 12) // Moon well (farmer)
+    
+    
+endfunction
+
+endlibrary

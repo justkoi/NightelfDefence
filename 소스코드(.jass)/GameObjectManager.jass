@@ -1,0 +1,47 @@
+library GameObjectManager initializer Init requires GameObject
+
+globals
+    private GameObjectList gameObjectList
+    private timer timerUpdate = null
+    private constant real fUpdatePeriod = 0.02
+endglobals
+
+private function UpdateMain takes nothing returns nothing
+    local GameObjectNode iter = gameObjectList.head
+    local GameObject data = NULL
+    //debug call Log("spellList.Count " + I2S(spellList.Count))
+    //debug call Log("healingLightning " + I2S(healingLightning))
+    loop
+        exitwhen not(iter != NULL)
+            set data = iter.data
+            ///지연된 Stopped 처리에 의해 필요합니다.
+            if(data.isDestroied) then
+                call data.OnDestroy()
+                call data.destroy()
+                set iter = gameObjectList.RemoveNode(iter)
+            else
+                call data.Update(fUpdatePeriod)
+                ///플레이후에 Timer에 의해 필요합니다.
+                if(data.isDestroied) then
+                    call data.OnDestroy()
+                    call data.destroy()
+                    set iter = gameObjectList.RemoveNode(iter)
+                else
+                    set iter = iter.next
+                endif
+            endif
+    endloop
+endfunction
+
+function AddGameObject takes GameObject gameObject returns nothing
+    call gameObject.Start()
+    call gameObjectList.Add(gameObject)
+endfunction
+
+private function Init takes nothing returns nothing
+    set gameObjectList = GameObjectList.create()
+    set timerUpdate = CreateTimer()
+    call TimerStart(timerUpdate, fUpdatePeriod, true, function UpdateMain)
+endfunction
+
+endlibrary 

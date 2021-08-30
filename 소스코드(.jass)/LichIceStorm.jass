@@ -1,0 +1,323 @@
+library LichIceStorm needs EffectManager, String, Extensions
+
+globals
+    private real fEffectTime = 1.0
+    private constant real fTickTime = 0.2
+    private constant real fKnockBackTime = fTickTime - 0.05
+    //private constant real damage = 660
+    private real fSpellingTime = fEffectTime + (fTickTime * 4) + 3.3 //스펠타임 일찎끝나면 g_locLastEffectStorm 증발해서 0,0으로 캐릭터 이동하는 버그가 있을수있음 15개 현재
+endglobals
+
+function OnLichIceStorm takes Vector3 vEffectPos, UnitList list returns nothing
+    local unitNode iter = list.head
+    debug call Log("[OnLichIceStorm]")
+    loop
+        exitwhen not(iter != NULL)
+            /*
+            if(not isUnitKnockBackImmune(iter.data)) then
+                call PlayMovementToLoc(iter.data,Location(vEffectPos.x,vEffectPos.y),true,80,-20,0.2,true,true,false)
+            endif
+            */
+            if(not IsUnitMagicImmune(iter.data) and not IsUnitFreezeImmune(iter.data)) then
+                call AddSpecialEffectTargetUnitBJ( "origin", iter.data, "Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl" )
+                call DestroyEffectBJ( GetLastCreatedEffectBJ() )
+                if (IsUnitType(iter.data, UNIT_TYPE_HERO)) then
+                    if(udg_nHardLevel >= Difficulty.Nightmare) then
+                        call AddFreezeUnit(iter.data, 3)
+                    elseif(udg_nHardLevel >= Difficulty.Hell) then
+                        call AddFreezeUnit(iter.data, 2)
+                    elseif(udg_nHardLevel >= Difficulty.VeryHard ) then
+                        call AddFreezeUnit(iter.data, 1)
+                    endif
+                endif
+            endif
+            set iter = iter.next
+    endloop
+    //call list.Dump()
+endfunction
+
+struct LichIceStorm extends AISpell
+    public real damage
+    public static AISpell filterSpell = NULL
+    public static method create takes real fCooldownTimeBase, unit uOwner, real damage returns thistype
+        local thistype this = thistype.allocate()
+        set this.fCooldownTimer = fCooldownTimeBase
+        set this.fCooldownTimeBase = fCooldownTimeBase
+        set this.fCooldownTime = fCooldownTimeBase
+        set this.uOwner = uOwner
+        set this.isSpelling = false
+        set this.fMpCost = 50
+        set this.damage = damage
+        return this
+    endmethod
+    
+    public method Play takes real dt returns nothing
+        if(isCooldown()) then
+            set fCooldownTimer = fCooldownTimer + dt
+        endif
+        if(CanUseSpell()) then
+            call StartSpell()
+            call AISpellManager_AddSpellUnit(uOwner)
+        endif
+    endmethod
+
+    public method isCooldown takes nothing returns boolean
+        return (fCooldownTimer < fCooldownTime)
+    endmethod
+    
+    public static method isTargetUnit takes nothing returns boolean
+        if(not IsUnitEnemy(GetFilterUnit(),GetOwningPlayer(filterSpell.uOwner))) then
+            return false
+        endif
+        if(not IsUnitType(GetFilterUnit(),UNIT_TYPE_HERO)) then
+            return false
+        endif
+        if(isUnitDead(GetFilterUnit())) then
+            return false
+        endif
+        return true
+    endmethod
+    
+    public method hasCost takes nothing returns boolean
+        return GetUnitMp(uOwner) > fMpCost
+    endmethod
+    
+    public method UseCost takes nothing returns nothing
+        call SetUnitMp(uOwner, GetUnitMp(uOwner) - fMpCost)
+    endmethod
+
+    public method CanUseSpell takes nothing returns boolean
+        local UnitList list = NULL
+        local Vector3 vPos = NULL
+        local boolean targetDetected = false
+        if(isCooldown()) then
+            return false
+        endif
+        if ( udg_bChanalingSkillBoss[3] == true ) then
+            return false
+        endif
+        if(isSpelling) then
+            return false
+        endif
+
+        if(not hasCost()) then
+            return false
+        endif
+        
+        if(AISpellManager_isUnitSpelling(uOwner)) then
+            return false
+        endif
+         if ( not ( GetUnitCurrentOrder(uOwner) != String2OrderIdBJ("blizzard") ) ) then
+        return false
+        endif
+        if ( not ( GetUnitCurrentOrder(uOwner) != String2OrderIdBJ("deathanddecay") ) ) then
+            return false
+        endif
+        if ( R2I(TimerGetRemaining(udg_TimerBossSkillCool[3])) <= 1.6) then
+            return false
+        endif
+        set filterSpell = this
+        set list = CreateUnitListInRangeByUnit(uOwner, 1000, Filter(function LichIceStorm.isTargetUnit))
+        
+        set targetDetected = not list.isEmpty()
+        
+        call list.destroy()
+        
+        return targetDetected
+    endmethod
+    
+    
+    public method StartSpell takes nothing returns nothing
+        local timer spellingTimer = NewTimerEx(this)
+        local timer effectTimer = NewTimerEx(this)
+        
+        call IssueImmediateOrder(uOwner,"channel")
+        call DisplayTimedTextToForce( udg_GroupPlayer, udg_fBossDisplayTime, "|cff3CFBFF리치|r: 차디찬 냉기속에 얼어붙어라!\n|cff3CFBFF리치의 공격에 당하면 온몸이 꽁꽁 얼어붙습니다.|r" )
+        call PlaySoundBJ( gg_snd_HeroLichWarcry1 )
+    
+        call UseCost()
+        set isSpelling = true
+        set udg_bChanalingSkillBoss[3] = true
+        
+        call TimerStart(effectTimer, fEffectTime, false, function thistype.OnSpellEffect)
+        call TimerStart(spellingTimer, fSpellingTime, false, function thistype.OnSpellEnd)
+        set spellingTimer = null
+        set effectTimer = null
+    endmethod
+    
+    public static method GetRingNumber takes real fDistance returns integer
+        local real ringPerRadius = 3
+        return R2I((fDistance/200.0)*ringPerRadius+ringPerRadius)
+    endmethod
+    
+    public static method OnSpellEffect takes nothing returns nothing
+        local LichIceStorm skillData = GetTimerData(GetExpiredTimer())
+        local integer i = 0
+        local EffectData data = NULL
+        local AttackHit attackHit = NULL
+        local Vector3 vPos = NULL
+        local unit uBoss = skillData.uOwner
+        local location locBoss = GetUnitLoc(uBoss)
+        local real fDistance = 1200
+        local real fAngle = 0
+        local location locTemp = null
+        local integer level = 0
+        local integer number = GetRingNumber(fDistance)
+        local real effectRange = 200
+        local real damage = skillData.damage
+        local integer seed = 4
+        local integer safetyZone = GetRandomInt(0,seed-1)
+        
+        set g_locLastEffectStorm = GetUnitLoc(uBoss)
+        debug call Log("[safetyZone,Number] "+I2S(safetyZone)+","+I2S(number)+" ")
+        
+        //원->근 0.6초 간격으로 펑펑펑 맞으면 5초간 얼어붙음
+        loop
+            exitwhen not (i<number)
+                if(GetRemainder(i,seed) != safetyZone) then
+                    set locTemp =  PolarProjectionBJ(locBoss,fDistance,fAngle+((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Rich_Coldbeam_Ice, vPos.Copy(),1.8,(level*fTickTime)+0.5+0.8).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uBoss,effectRange,HeroTargetType.All,GroundType.All,false,0.8,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnLichIceStorm)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                endif
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //1000
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                if(GetRemainder(i,seed) != safetyZone) then
+                    set locTemp =  PolarProjectionBJ(locBoss,fDistance,fAngle+((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Rich_Coldbeam_Ice, vPos.Copy(),1.8,(level*fTickTime)+0.5+0.8).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uBoss,effectRange,HeroTargetType.All,GroundType.All,false,0.8,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnLichIceStorm)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                endif
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //800
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                if(GetRemainder(i,seed) != safetyZone) then
+                    set locTemp =  PolarProjectionBJ(locBoss,fDistance,fAngle+((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Rich_Coldbeam_Ice, vPos.Copy(),1.8,(level*fTickTime)+0.5+0.8).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uBoss,effectRange,HeroTargetType.All,GroundType.All,false,0.8,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnLichIceStorm)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                endif
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //600
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                if(GetRemainder(i,seed) != safetyZone) then
+                    set locTemp =  PolarProjectionBJ(locBoss,fDistance,fAngle+((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Rich_Coldbeam_Ice, vPos.Copy(),1.8,(level*fTickTime)+0.5+0.8).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uBoss,effectRange,HeroTargetType.All,GroundType.All,false,0.8,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnLichIceStorm)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                endif
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //400
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                if(GetRemainder(i,seed) != safetyZone) then
+                    set locTemp =  PolarProjectionBJ(locBoss,fDistance,fAngle+((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Rich_Coldbeam_Ice, vPos.Copy(),1.8,(level*fTickTime)+0.5+0.8).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uBoss,effectRange,HeroTargetType.All,GroundType.All,false,0.8,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnLichIceStorm)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                endif
+                set i = i+1
+        endloop
+        
+        set i = 0
+        set fDistance = fDistance - 200 //200
+        set level = level + 1
+        set number = GetRingNumber(fDistance)
+        loop
+            exitwhen not (i<number)
+                if(GetRemainder(i,seed) != safetyZone) then
+                    set locTemp =  PolarProjectionBJ(locBoss,fDistance,fAngle+((360.0/number) * i))
+                    set vPos = Vector3.create(0,0,0).PosFromLocation(locTemp)
+                    call PlayEffectAtPos(EffectId.Rich_Coldbeam_Alert, vPos.Copy(),0.8,(level*fTickTime)+0.5).RotateTo(0)
+                    set data = PlayEffectAtPos(EffectId.Rich_Coldbeam_Ice, vPos.Copy(),1.8,(level*fTickTime)+0.5+0.8).RotateTo(0)
+                    set attackHit = NewCircleAttackHit(uBoss,effectRange,HeroTargetType.All,GroundType.All,false,0.8,damage,ATTACK_TYPE_NORMAL,DAMAGE_TYPE_MAGIC)
+                    call attackHit.AddOnDamage(OnLichIceStorm)
+                    call data.AddAttackHit(attackHit)
+                    call vPos.destroy()
+                endif
+                set i = i+1
+        endloop
+        
+    endmethod
+    
+    public static method OnSpellEnd takes nothing returns nothing
+         local LichIceStorm data = GetTimerData(GetExpiredTimer())
+         call data.EndSpell()
+         call AISpellManager_RemoveSpellUnit(data.uOwner)
+         if(g_locLastEffectStorm != null) then
+            call RemoveLocation(g_locLastEffectStorm)
+            set g_locLastEffectStorm = null
+         endif
+        debug call Log("[B] g_locLastEffectStorm = " + GetLocationString(g_locLastEffectStorm))
+         call ReleaseTimer(GetExpiredTimer())
+    endmethod
+    
+    public method EndSpell takes nothing returns nothing
+        set isSpelling = false
+        set udg_bChanalingSkillBoss[3] = false
+        call ResetCooldown()
+    endmethod
+    
+    public method ResetCooldown takes nothing returns nothing
+        set fCooldownTimer = fCooldownTimer - fCooldownTime
+        //-1~+1초 랜덤
+        set fCooldownTime = fCooldownTimeBase + (GetRandomReal(0,2) - 1) 
+    endmethod
+    
+    public method isExpired takes nothing returns boolean
+        if(isUnitDead(uOwner)) then
+            return true
+        endif
+        return false
+    endmethod
+    
+    public method onDestroy takes nothing returns nothing
+        set uOwner = null
+    endmethod
+endstruct
+
+endlibrary

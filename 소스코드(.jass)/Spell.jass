@@ -1,0 +1,24 @@
+library Spell
+
+interface Spell
+
+public string strKey = "null"
+public real fTimer = 0
+public real fTime = 0
+public boolean expired = false
+public method StartSpell takes nothing returns nothing
+public method Play takes real dt returns nothing
+public method EndSpell takes nothing returns nothing
+public method isExpired takes real dt returns boolean
+
+endinterface
+
+//스펠 사용 시
+//정보는 외부 기록?
+//
+
+//SpellManager.AddSpell()?
+//
+
+endlibrary
+

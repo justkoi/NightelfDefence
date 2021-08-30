@@ -1,0 +1,61 @@
+scope ItemInjuredKnight initializer Init 
+
+globals
+    private integer nKinghtCommanderId = 'h01I'
+    private integer nKinghtId = 'h01J'
+    private FairyUnit KinghtCommanderFairyUnit
+    private unit uSpecimen = null
+    private unit uKinghtCommander = null
+endglobals
+
+public function SetFairing takes nothing returns nothing
+    local unit uTarget = GetEnumUnit()
+    call PlaySpell(FairyUnit.create(uTarget, uKinghtCommander, 900, 350, playerNightElf, playerNightElf, udg_locNightElfHeroRegen,true,true))
+    set uTarget = null
+endfunction
+
+private function OnSpellStart takes nothing returns nothing
+    local location locUnit 
+    local group kinghtGroup = null
+    
+    set uSpecimen = GetTriggerUnit()
+    set locUnit = PolarProjectionBJ( GetUnitLoc(uSpecimen),400,0)
+    set uKinghtCommander = CreateUnitAtLoc(GetOwningPlayer(uSpecimen),nKinghtCommanderId,locUnit,0.0)
+    call UnitApplyTimedLife( uKinghtCommander, 'Broa', 300 )
+    set kinghtGroup = CreateNUnitAtLoc(playerNightElf,nKinghtId,11,PolarProjectionBJ( locUnit,-200,0) ,0.0)
+    call ForGroup(kinghtGroup, function ItemInjuredKnight_SetFairing)
+    
+    call ShowNotificationAll(Color.MainNoti+"기사단장 아이모|r : 구해주신 은혜는 잊지 않았습니다. 기사단이여 나를 따르라!\n"+Color.SubNoti+"(기사단장이 사망하면 휘하의 모든 기사단원이 도망갑니다. 기사단장의 소환시간은 5분입니다.)|r")
+    
+    call PlaySoundOnUnitBJ( gg_snd_KnightWarcry1, 100.0, uKinghtCommander)
+    call PlaySoundOnUnitBJ( gg_snd_HorseLoop1, 100.0, uKinghtCommander)
+    call PlaySoundOnUnitBJ( gg_snd_KnightNoRiderYesAttack1, 100.0, uKinghtCommander)
+    
+    //call PlaySpell(FairyUnit.create(uKinghtCommander, uSpecimen, 900, 400, GetOwningPlayer(uSpecimen), playerNightElf, udg_locNightElfHeroRegen,false))
+    set uSpecimen = null
+    set locUnit = null
+    call DestroyGroup(kinghtGroup)
+endfunction
+
+private function CheckSpellCode takes nothing returns boolean
+    if(GetSpellAbilityId() == 'A0E4') then
+        return true
+    endif
+    return false
+endfunction
+
+private function OnSpellCheck takes nothing returns nothing
+    if ( CheckSpellCode() == false ) then
+        return
+    endif
+    
+    call OnSpellStart()
+endfunction
+
+private function Init takes nothing returns nothing
+    local trigger t = CreateTrigger(  )
+    call TriggerRegisterAnyUnitEventBJ(  t, EVENT_PLAYER_UNIT_SPELL_EFFECT )
+    call TriggerAddAction(  t, function OnSpellCheck )
+endfunction
+
+endscope
